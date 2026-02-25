@@ -1,0 +1,21 @@
+services:
+  workshop:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    privileged: true
+    ports:
+      - "7424:7424"
+      - "49200-49300:49200-49300"  # Range for proxied container ports
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - WORKSHOP_PORT=7424
+      - WORKSHOP_DB_PATH=/data/workshop.db
+    volumes:
+      - docker-data:/var/lib/docker
+      - workshop-data:/data
+    restart: unless-stopped
+
+volumes:
+  docker-data:
+  workshop-data:
