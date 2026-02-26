@@ -1,8 +1,8 @@
 services:
   workshop:
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: server/Dockerfile
     privileged: true
     ports:
       - "7424:7424"
