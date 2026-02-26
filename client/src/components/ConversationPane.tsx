@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAppState, useAppDispatch } from '../store/AppContext'
 import { useContainerLogs } from '../hooks/useContainerLogs'
 import { useMessageStream } from '../hooks/useMessageStream'
-import { listMessages, stopCraftsman, startCraftsman, getStats } from '../api'
+import { listMessages, stopCraftsman, startCraftsman, deleteCraftsman, getStats } from '../api'
 import type { Tab } from '../store/reducer'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
@@ -79,6 +79,19 @@ export default function ConversationPane({ craftsmanId }: Props) {
     }
   }
 
+  async function handleDelete() {
+    if (!confirm(`Relieve craftsman "${craftsman?.name}"? This will remove the container and all message history.`)) return
+    setActionError(null)
+    setIsActioning(true)
+    try {
+      await deleteCraftsman(craftsmanId)
+      dispatch({ type: 'REMOVE_CRAFTSMAN', id: craftsmanId })
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : String(err))
+      setIsActioning(false)
+    }
+  }
+
   if (!craftsman) return null
 
   const stats = ui?.stats
@@ -120,6 +133,15 @@ export default function ConversationPane({ craftsmanId }: Props) {
               Start
             </button>
           ) : null}
+          {(craftsman.status === 'stopped' || craftsman.status === 'error') && (
+            <button
+              className="header-btn danger"
+              onClick={handleDelete}
+              disabled={isActioning}
+            >
+              Relieve
+            </button>
+          )}
         </div>
       </div>
 

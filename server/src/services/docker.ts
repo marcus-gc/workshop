@@ -1,4 +1,6 @@
 import Docker from "dockerode";
+import fs from "node:fs";
+import crypto from "node:crypto";
 import db from "../db/client.js";
 import type { Craftsman, Project } from "../types.js";
 
@@ -6,16 +8,53 @@ const docker = new Docker();
 
 const CRAFTSMAN_IMAGE = "workshop-craftsman";
 
+const PORT_RANGE_START = 49200;
+const PORT_RANGE_END = 49300;
+
+function getUsedPorts(): Set<number> {
+  const craftsmen = db
+    .prepare("SELECT port_mappings FROM craftsmen WHERE status IN ('pending','starting','running')")
+    .all() as { port_mappings: string }[];
+  const used = new Set<number>();
+  for (const c of craftsmen) {
+    const mappings = JSON.parse(c.port_mappings) as Record<string, number>;
+    for (const port of Object.values(mappings)) {
+      used.add(port);
+    }
+  }
+  return used;
+}
+
+function allocatePort(): number {
+  const used = getUsedPorts();
+  for (let port = PORT_RANGE_START; port <= PORT_RANGE_END; port++) {
+    if (!used.has(port)) return port;
+  }
+  throw new Error(`No available ports in range ${PORT_RANGE_START}-${PORT_RANGE_END}`);
+}
+
 export async function ensureCraftsmanImage(): Promise<void> {
+  const dockerfile = fs.readFileSync("/app/Dockerfile.craftsman", "utf-8");
+  const hash = crypto.createHash("sha256").update(dockerfile).digest("hex");
+
   const images = await docker.listImages({
     filters: { reference: [CRAFTSMAN_IMAGE] },
   });
-  if (images.length > 0) return;
+
+  if (images.length > 0) {
+    const existing = images[0];
+    if (existing.Labels?.["dockerfile.hash"] === hash) {
+      console.log("Craftsman image up to date.");
+      return;
+    }
+    console.log("Dockerfile.craftsman changed, removing old image...");
+    await docker.getImage(existing.Id).remove({ force: true });
+  }
 
   console.log("Building workshop-craftsman image...");
   const stream = await docker.buildImage(
     { context: "/app", src: ["Dockerfile.craftsman"] },
-    { t: CRAFTSMAN_IMAGE, dockerfile: "Dockerfile.craftsman" }
+    { t: CRAFTSMAN_IMAGE, dockerfile: "Dockerfile.craftsman", labels: { "dockerfile.hash": hash } }
   );
   await new Promise<void>((resolve, reject) => {
     docker.modem.followProgress(
@@ -35,12 +74,15 @@ export async function createContainer(
 ): Promise<{ containerId: string; portMappings: Record<string, number> }> {
   const ports = JSON.parse(project.ports) as number[];
   const exposedPorts: Record<string, object> = {};
-  const portBindings: Record<string, Array<{ HostPort: string }>> = {};
+  const portBindings: Record<string, Array<{ HostPort: string; HostIp: string }>> = {};
 
+  const portMappings: Record<string, number> = {};
   for (const port of ports) {
     const key = `${port}/tcp`;
+    const hostPort = allocatePort();
     exposedPorts[key] = {};
-    portBindings[key] = [{ HostPort: "0" }]; // Let Docker assign a host port
+    portBindings[key] = [{ HostIp: "0.0.0.0", HostPort: String(hostPort) }];
+    portMappings[String(port)] = hostPort;
   }
 
   const container = await docker.createContainer({
@@ -54,18 +96,6 @@ export async function createContainer(
   });
 
   await container.start();
-
-  // Get assigned host ports
-  const info = await container.inspect();
-  const portMappings: Record<string, number> = {};
-  const networkPorts = info.NetworkSettings.Ports;
-  for (const port of ports) {
-    const key = `${port}/tcp`;
-    const binding = networkPorts[key]?.[0];
-    if (binding) {
-      portMappings[String(port)] = parseInt(binding.HostPort, 10);
-    }
-  }
 
   return { containerId: container.id, portMappings };
 }

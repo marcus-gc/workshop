@@ -28,7 +28,8 @@ export default function ServerPreview({ craftsman }: Props) {
   }
 
   const selectedPort = activePort ?? ports[0]
-  const proxyUrl = `/proxy/${craftsman.name}/${selectedPort}/`
+  const hostPort = portMappings[selectedPort]
+  const proxyUrl = `${window.location.protocol}//${window.location.hostname}:${hostPort}/`
 
   return (
     <div className="preview-pane">
