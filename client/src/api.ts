@@ -1,7 +1,6 @@
 import type {
   Project,
   Craftsman,
-  Message,
   DiffResult,
   CommitResult,
   PushResult,
@@ -66,21 +65,6 @@ export function startCraftsman(id: string): Promise<void> {
 
 export function deleteCraftsman(id: string): Promise<void> {
   return request(`/api/craftsmen/${id}`, { method: 'DELETE' });
-}
-
-// ── Messages ──────────────────────────────────────────────────────────────────
-
-export function listMessages(craftsmanId: string): Promise<Message[]> {
-  return request(`/api/craftsmen/${craftsmanId}/messages`);
-}
-
-/** Returns the raw Response — caller reads the SSE body stream */
-export function sendMessageStream(craftsmanId: string, content: string): Promise<Response> {
-  return fetch(`/api/craftsmen/${craftsmanId}/messages/stream`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content }),
-  });
 }
 
 // ── Git ───────────────────────────────────────────────────────────────────────

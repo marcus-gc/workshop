@@ -9,12 +9,11 @@ export async function createTerminalExec(
   const container = docker.getContainer(containerId);
 
   const exec = await container.exec({
-    Cmd: ["/bin/bash"],
+    Cmd: ["tmux", "new-session", "-A", "-s", "main", "-c", "/workspace/project"],
     AttachStdin: true,
     AttachStdout: true,
     AttachStderr: true,
     Tty: true,
-    WorkingDir: "/workspace/project",
   });
 
   const stream = await exec.start({ hijack: true, stdin: true });

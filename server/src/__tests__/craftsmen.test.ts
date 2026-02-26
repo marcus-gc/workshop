@@ -178,24 +178,6 @@ describe("Craftsmen API", () => {
       expect(check.status).toBe(404);
     });
 
-    it("deletes associated messages", async () => {
-      const project = await createProject();
-      const craftsman = (await createRunningCraftsman(project.id, "alice")) as any;
-      const db = (await import("../db/client.js")).default;
-      const { v4: uuid } = await import("uuid");
-
-      db.prepare(
-        "INSERT INTO messages (id, craftsman_id, role, content) VALUES (?, ?, 'user', 'hello')"
-      ).run(uuid(), craftsman.id);
-
-      await request("DELETE", "/api/craftsmen/alice");
-
-      const count = db
-        .prepare("SELECT COUNT(*) as count FROM messages WHERE craftsman_id = ?")
-        .get(craftsman.id) as { count: number };
-      expect(count.count).toBe(0);
-    });
-
     it("returns 404 for nonexistent craftsman", async () => {
       const res = await request("DELETE", "/api/craftsmen/nobody");
       expect(res.status).toBe(404);

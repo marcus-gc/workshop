@@ -21,25 +21,3 @@ export interface Craftsman {
   created_at: string;
   updated_at: string;
 }
-
-export interface Message {
-  id: string;
-  craftsman_id: string;
-  role: "user" | "assistant";
-  content: string;
-  cost_usd: number | null;
-  duration_ms: number | null;
-  created_at: string;
-}
-
-export interface ClaudeResponse {
-  result: string;
-  session_id: string;
-  cost_usd: number;
-  duration_ms: number;
-}
-
-export interface StreamEvent {
-  type: string;
-  [key: string]: unknown;
-}

@@ -1,11 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useAppState, useAppDispatch } from '../store/AppContext'
 import { useContainerLogs } from '../hooks/useContainerLogs'
-import { useMessageStream } from '../hooks/useMessageStream'
-import { listMessages, stopCraftsman, startCraftsman, deleteCraftsman, getStats } from '../api'
+import { stopCraftsman, startCraftsman, deleteCraftsman, getStats } from '../api'
 import type { Tab } from '../store/reducer'
-import MessageList from './MessageList'
-import MessageInput from './MessageInput'
 import LogsViewer from './LogsViewer'
 import ServerPreview from './ServerPreview'
 import TerminalView from './TerminalView'
@@ -26,15 +23,7 @@ export default function ConversationPane({ craftsmanId }: Props) {
   const craftsman = state.craftsmen.find((c) => c.id === craftsmanId)
   const project = craftsman ? state.projects.find((p) => p.id === craftsman.project_id) : null
   const ui = state.craftsmanUi[craftsmanId]
-  const activeTab: Tab = ui?.activeTab ?? 'chat'
-
-  // Load messages on mount / craftsman change
-  useEffect(() => {
-    if (!craftsmanId) return
-    listMessages(craftsmanId)
-      .then((messages) => dispatch({ type: 'SET_MESSAGES', craftsmanId, messages }))
-      .catch(() => {})
-  }, [craftsmanId, dispatch])
+  const activeTab: Tab = ui?.activeTab ?? 'terminal'
 
   // Poll stats every 5s when running
   useEffect(() => {
@@ -51,9 +40,6 @@ export default function ConversationPane({ craftsmanId }: Props) {
 
   // Subscribe to container logs when Logs tab is active
   useContainerLogs(craftsmanId, activeTab === 'logs', dispatch)
-
-  // Message streaming
-  const sendMessage = useMessageStream(craftsmanId, dispatch)
 
   async function handleStop() {
     setActionError(null)
@@ -83,7 +69,7 @@ export default function ConversationPane({ craftsmanId }: Props) {
   }
 
   async function handleDelete() {
-    if (!confirm(`Relieve craftsman "${craftsman?.name}"? This will remove the container and all message history.`)) return
+    if (!confirm(`Relieve craftsman "${craftsman?.name}"? This will remove the container and all data.`)) return
     setActionError(null)
     setIsActioning(true)
     try {
@@ -156,11 +142,10 @@ export default function ConversationPane({ craftsmanId }: Props) {
 
       {/* Tabs */}
       <div className="tab-bar">
-        {(['chat', 'logs', 'terminal', 'preview'] as Tab[]).map((tab) => {
+        {(['terminal', 'logs', 'preview'] as Tab[]).map((tab) => {
           const labels: Record<Tab, string> = {
-            chat: 'Conversation',
-            logs: 'Logs',
             terminal: 'Terminal',
+            logs: 'Logs',
             preview: 'Preview',
           }
           return (
@@ -176,19 +161,8 @@ export default function ConversationPane({ craftsmanId }: Props) {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'chat' && (
-        <>
-          <MessageList
-            messages={ui?.messages ?? []}
-            streamingContent={ui?.streamingContent ?? null}
-          />
-          <MessageInput
-            craftsmanId={craftsmanId}
-            isRunning={isRunning}
-            isStreaming={ui?.isStreaming ?? false}
-            onSend={sendMessage}
-          />
-        </>
+      {activeTab === 'terminal' && (
+        <TerminalView craftsmanId={craftsmanId} isRunning={isRunning} />
       )}
 
       {activeTab === 'logs' && (
@@ -197,10 +171,6 @@ export default function ConversationPane({ craftsmanId }: Props) {
           logLines={ui?.logLines ?? []}
           onClear={() => dispatch({ type: 'CLEAR_LOGS', craftsmanId })}
         />
-      )}
-
-      {activeTab === 'terminal' && (
-        <TerminalView craftsmanId={craftsmanId} isRunning={isRunning} />
       )}
 
       {activeTab === 'preview' && (
