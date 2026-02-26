@@ -13,6 +13,15 @@ vi.mock("../services/docker.js", () => ({
   startContainer: vi.fn().mockResolvedValue(undefined),
   removeContainer: vi.fn().mockResolvedValue(undefined),
   getContainerLogs: vi.fn(),
+  getGitDiff: vi.fn().mockResolvedValue({ diff: "diff --git a/file.ts", stat: " file.ts | 5 +++++" }),
+  gitCommit: vi.fn().mockResolvedValue("[main abc1234] test commit\n 1 file changed"),
+  gitPush: vi.fn().mockResolvedValue("To https://github.com/owner/repo\n * [new branch] craftsman/alice"),
+  getContainerStats: vi.fn().mockResolvedValue({
+    cpu_percent: 5.2,
+    memory_mb: 128.4,
+    memory_limit_mb: 2048,
+    pids: 12,
+  }),
   docker: {},
 }));
 
@@ -23,6 +32,19 @@ vi.mock("../services/claude.js", () => ({
     cost_usd: 0.025,
     duration_ms: 5000,
   }),
+  streamMessage: vi.fn().mockImplementation(
+    (_containerId: string, _message: string, _sessionId: string | null, onEvent: (e: unknown) => void) => {
+      onEvent({ type: "system", subtype: "init", session_id: "stream-session-456" });
+      onEvent({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Working on it..." }] } });
+      onEvent({ type: "result", result: "Done.", session_id: "stream-session-456", total_cost_usd: 0.01, duration_ms: 3000 });
+      return Promise.resolve({
+        result: "Done.",
+        session_id: "stream-session-456",
+        cost_usd: 0.01,
+        duration_ms: 3000,
+      });
+    }
+  ),
 }));
 
 // Reset DB tables before each test
