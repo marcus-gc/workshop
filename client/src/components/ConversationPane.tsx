@@ -9,6 +9,7 @@ import MessageInput from './MessageInput'
 import LogsViewer from './LogsViewer'
 import ServerPreview from './ServerPreview'
 import TerminalView from './TerminalView'
+import { useTerminalStore } from '../store/terminalStore'
 import GitPanel from './GitPanel'
 
 interface Props {
@@ -59,6 +60,7 @@ export default function ConversationPane({ craftsmanId }: Props) {
     setIsActioning(true)
     try {
       await stopCraftsman(craftsmanId)
+      useTerminalStore.getState().destroy(craftsmanId)
       dispatch({ type: 'UPDATE_CRAFTSMAN_STATUS', id: craftsmanId, status: 'stopped' })
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : String(err))
@@ -86,6 +88,7 @@ export default function ConversationPane({ craftsmanId }: Props) {
     setIsActioning(true)
     try {
       await deleteCraftsman(craftsmanId)
+      useTerminalStore.getState().destroy(craftsmanId)
       dispatch({ type: 'REMOVE_CRAFTSMAN', id: craftsmanId })
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : String(err))
