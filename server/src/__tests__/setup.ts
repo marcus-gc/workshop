@@ -25,32 +25,9 @@ vi.mock("../services/docker.js", () => ({
   docker: {},
 }));
 
-vi.mock("../services/claude.js", () => ({
-  sendMessage: vi.fn().mockResolvedValue({
-    result: "I'll help you with that.",
-    session_id: "fake-session-123",
-    cost_usd: 0.025,
-    duration_ms: 5000,
-  }),
-  streamMessage: vi.fn().mockImplementation(
-    (_containerId: string, _message: string, _sessionId: string | null, onEvent: (e: unknown) => void) => {
-      onEvent({ type: "system", subtype: "init", session_id: "stream-session-456" });
-      onEvent({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Working on it..." }] } });
-      onEvent({ type: "result", result: "Done.", session_id: "stream-session-456", total_cost_usd: 0.01, duration_ms: 3000 });
-      return Promise.resolve({
-        result: "Done.",
-        session_id: "stream-session-456",
-        cost_usd: 0.01,
-        duration_ms: 3000,
-      });
-    }
-  ),
-}));
-
 // Reset DB tables before each test
 beforeEach(async () => {
   const { default: db } = await import("../db/client.js");
-  db.exec("DELETE FROM messages");
   db.exec("DELETE FROM craftsmen");
   db.exec("DELETE FROM projects");
 });

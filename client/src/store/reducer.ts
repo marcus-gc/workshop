@@ -1,13 +1,10 @@
-import type { Craftsman, Message, Project, StatsResult } from '../types';
+import type { Craftsman, Project, StatsResult } from '../types';
 
-export type Tab = 'chat' | 'logs' | 'preview' | 'terminal';
+export type Tab = 'terminal' | 'logs' | 'preview';
 export type View = 'conversation' | 'settings';
 
 export interface CraftsmanUiState {
   activeTab: Tab;
-  messages: Message[];
-  streamingContent: string | null;
-  isStreaming: boolean;
   logLines: string[];
   stats: StatsResult | null;
 }
@@ -21,10 +18,7 @@ export interface AppState {
 }
 
 export const initialUiState = (): CraftsmanUiState => ({
-  activeTab: 'chat',
-  messages: [],
-  streamingContent: null,
-  isStreaming: false,
+  activeTab: 'terminal',
   logLines: [],
   stats: null,
 });
@@ -45,12 +39,8 @@ export type Action =
   | { type: 'UPDATE_CRAFTSMAN_STATUS'; id: string; status: Craftsman['status']; error_message?: string | null }
   | { type: 'ADD_CRAFTSMAN'; craftsman: Craftsman }
   | { type: 'REMOVE_CRAFTSMAN'; id: string }
-  | { type: 'SET_MESSAGES'; craftsmanId: string; messages: Message[] }
   | { type: 'APPEND_LOG'; craftsmanId: string; line: string }
   | { type: 'CLEAR_LOGS'; craftsmanId: string }
-  | { type: 'STREAM_CHUNK'; craftsmanId: string; content: string }
-  | { type: 'STREAM_DONE'; craftsmanId: string; message: Message }
-  | { type: 'STREAM_ERROR'; craftsmanId: string }
   | { type: 'SET_ACTIVE_TAB'; craftsmanId: string; tab: Tab }
   | { type: 'SET_STATS'; craftsmanId: string; stats: StatsResult };
 
@@ -115,17 +105,6 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     }
 
-    case 'SET_MESSAGES': {
-      const ui = ensureUi(state, action.craftsmanId);
-      return {
-        ...state,
-        craftsmanUi: {
-          ...ui,
-          [action.craftsmanId]: { ...ui[action.craftsmanId], messages: action.messages },
-        },
-      };
-    }
-
     case 'APPEND_LOG': {
       const ui = ensureUi(state, action.craftsmanId);
       const existing = ui[action.craftsmanId];
@@ -148,55 +127,6 @@ export function reducer(state: AppState, action: Action): AppState {
         craftsmanUi: {
           ...ui,
           [action.craftsmanId]: { ...ui[action.craftsmanId], logLines: [] },
-        },
-      };
-    }
-
-    case 'STREAM_CHUNK': {
-      const ui = ensureUi(state, action.craftsmanId);
-      const existing = ui[action.craftsmanId];
-      return {
-        ...state,
-        craftsmanUi: {
-          ...ui,
-          [action.craftsmanId]: {
-            ...existing,
-            isStreaming: true,
-            streamingContent: (existing.streamingContent ?? '') + action.content,
-          },
-        },
-      };
-    }
-
-    case 'STREAM_DONE': {
-      const ui = ensureUi(state, action.craftsmanId);
-      const existing = ui[action.craftsmanId];
-      return {
-        ...state,
-        craftsmanUi: {
-          ...ui,
-          [action.craftsmanId]: {
-            ...existing,
-            isStreaming: false,
-            streamingContent: null,
-            messages: [...existing.messages, action.message],
-          },
-        },
-      };
-    }
-
-    case 'STREAM_ERROR': {
-      const ui = ensureUi(state, action.craftsmanId);
-      const existing = ui[action.craftsmanId];
-      return {
-        ...state,
-        craftsmanUi: {
-          ...ui,
-          [action.craftsmanId]: {
-            ...existing,
-            isStreaming: false,
-            streamingContent: null,
-          },
         },
       };
     }

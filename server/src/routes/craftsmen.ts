@@ -106,7 +106,6 @@ app.delete("/:id", async (c) => {
     await removeContainer(craftsman.container_id);
   }
 
-  db.prepare("DELETE FROM messages WHERE craftsman_id = ?").run(craftsman.id);
   db.prepare("DELETE FROM craftsmen WHERE id = ?").run(craftsman.id);
 
   return c.json({ ok: true });

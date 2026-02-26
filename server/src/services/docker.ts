@@ -138,6 +138,9 @@ export async function initContainer(
       "/workspace/project"
     );
   }
+
+  // Start a detached tmux session for interactive terminal access
+  await execInContainer(container, ["tmux", "new-session", "-d", "-s", "main", "-c", "/workspace/project"]);
 }
 
 /** Run a command and tee its output to the container log file. */

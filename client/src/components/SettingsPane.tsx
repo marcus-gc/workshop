@@ -5,12 +5,8 @@ import {
   deleteProject,
   validateGitHubToken,
   listGitHubRepos,
-  createCraftsman,
-  sendMessageStream,
-  gitCommit,
-  gitPush,
 } from '../api'
-import type { Project, GitHubRepo, Craftsman } from '../types'
+import type { Project, GitHubRepo } from '../types'
 
 const TOKEN_KEY = 'workshop_github_token'
 
@@ -29,10 +25,6 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [importingId, setImportingId] = useState<number | null>(null)
-  const [workshopGenId, setWorkshopGenId] = useState<string | null>(null)
-  const [workshopOutput, setWorkshopOutput] = useState<string>('')
-  const [workshopDone, setWorkshopDone] = useState(false)
-  const [workshopError, setWorkshopError] = useState<string | null>(null)
 
   useEffect(() => {
     refreshProjects()
@@ -104,131 +96,6 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
       onProjectsChanged()
     } catch (err: unknown) {
       setSyncError(err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  async function handleGenerateWorkshopMd(project: Project) {
-    setWorkshopGenId(project.id)
-    setWorkshopOutput('')
-    setWorkshopDone(false)
-    setWorkshopError(null)
-
-    // Create a setup craftsman
-    let craftsman: Craftsman
-    try {
-      craftsman = await createCraftsman({
-        name: `setup-${project.name}-${Date.now()}`.slice(0, 30).replace(/[^a-z0-9-]/g, '-'),
-        project_id: project.id,
-      })
-    } catch (err: unknown) {
-      setWorkshopError(err instanceof Error ? err.message : String(err))
-      setWorkshopGenId(null)
-      return
-    }
-
-    // Wait for craftsman to be running
-    await new Promise<void>((resolve, reject) => {
-      const es = new EventSource(`/api/craftsmen/${craftsman.id}/events`)
-      const timeout = setTimeout(() => {
-        es.close()
-        reject(new Error('Timed out waiting for craftsman to start'))
-      }, 120_000)
-
-      es.addEventListener('status', (e: MessageEvent) => {
-        const data = JSON.parse(e.data) as { status: string; error_message?: string }
-        if (data.status === 'running') {
-          clearTimeout(timeout)
-          es.close()
-          resolve()
-        } else if (data.status === 'error') {
-          clearTimeout(timeout)
-          es.close()
-          reject(new Error(data.error_message ?? 'Container failed to start'))
-        }
-      })
-      es.onerror = () => {}
-    }).catch((err: Error) => {
-      setWorkshopError(err.message)
-      setWorkshopGenId(null)
-      return
-    })
-
-    if (workshopError) return
-
-    // Send the analysis prompt
-    const prompt = `Analyze this project and create a WORKSHOP.md file at the root with the following format:
-
-# Project Setup
-
-## Setup
-\`\`\`
-<command to install dependencies, e.g. npm install>
-\`\`\`
-
-## Run
-\`\`\`
-<command to start dev server, e.g. npm run dev>
-\`\`\`
-
-## Ports
-- <port number>: <description>
-
-Instructions:
-1. Read package.json or equivalent config files to understand this project
-2. Find what port(s) the dev server listens on (check scripts, vite.config, next.config, etc.)
-3. Write the WORKSHOP.md file using the file writing tool
-4. Reply with a brief summary of what you found
-
-Write the file now.`
-
-    try {
-      const res = await sendMessageStream(craftsman.id, prompt)
-      if (!res.body) throw new Error('No response body')
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let currentEvent = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            currentEvent = line.slice(7).trim()
-          } else if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(6))
-            if (currentEvent === 'assistant' && data.type === 'assistant') {
-              const content = data.message?.content ?? []
-              for (const block of content) {
-                if (block.type === 'text') {
-                  setWorkshopOutput((prev) => prev + block.text)
-                }
-              }
-            } else if (currentEvent === 'done') {
-              // Commit and push
-              try {
-                await gitCommit(craftsman.id, 'chore: add WORKSHOP.md')
-                await gitPush(craftsman.id)
-                setWorkshopDone(true)
-                await refreshProjects()
-                onProjectsChanged()
-              } catch {}
-            } else if (currentEvent === 'error') {
-              throw new Error(data.error ?? 'Unknown error')
-            }
-            currentEvent = ''
-          }
-        }
-      }
-    } catch (err: unknown) {
-      setWorkshopError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setWorkshopGenId(null)
     }
   }
 
@@ -322,16 +189,6 @@ Write the file now.`
                       )}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      {noPorts && token && (
-                        <button
-                          className="btn btn-ghost"
-                          style={{ fontSize: 11, padding: '2px 8px', marginRight: 6 }}
-                          onClick={() => handleGenerateWorkshopMd(p)}
-                          disabled={workshopGenId === p.id}
-                        >
-                          {workshopGenId === p.id ? 'Generating…' : 'Generate WORKSHOP.md'}
-                        </button>
-                      )}
                       <button
                         className="btn btn-ghost"
                         style={{ fontSize: 11, padding: '2px 8px', color: 'var(--status-error)' }}
@@ -351,35 +208,6 @@ Write the file now.`
           </div>
         )}
 
-        {/* WORKSHOP.md generation output */}
-        {(workshopOutput || workshopDone || workshopError) && (
-          <div style={{ marginBottom: 16 }}>
-            {workshopDone && (
-              <div style={{ color: 'var(--status-running)', fontSize: 13, marginBottom: 8 }}>
-                ✓ WORKSHOP.md created and pushed to branch
-              </div>
-            )}
-            {workshopError && (
-              <div className="error-banner" style={{ marginBottom: 8 }}>{workshopError}</div>
-            )}
-            {workshopOutput && (
-              <div style={{
-                background: 'var(--log-bg)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                padding: '10px 12px',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11.5,
-                color: 'var(--text-secondary)',
-                maxHeight: 200,
-                overflowY: 'auto',
-                whiteSpace: 'pre-wrap',
-              }}>
-                {workshopOutput}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="divider" />

@@ -22,16 +22,6 @@ export interface Craftsman {
   updated_at: string;
 }
 
-export interface Message {
-  id: string;
-  craftsman_id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  cost_usd: number | null;
-  duration_ms: number | null;
-  created_at: string;
-}
-
 export interface DiffResult {
   diff: string;
   files_changed: string[];
@@ -80,21 +70,6 @@ export interface CreateCraftsmanPayload {
   name: string;
   project_id: string;
 }
-
-// Stream event types from /api/craftsmen/:id/messages/stream
-export type StreamEventType =
-  | { type: 'system'; subtype: string; [k: string]: unknown }
-  | { type: 'assistant'; message: { content: AssistantContent[] } }
-  | { type: 'tool_use'; id: string; name: string; input: unknown }
-  | { type: 'tool_result'; tool_use_id: string; content: unknown }
-  | { type: 'result'; result: string; session_id: string; total_cost_usd: number; duration_ms: number }
-  | { type: 'done'; result: string; session_id: string; cost_usd: number; duration_ms: number; message_id: string }
-  | { type: 'error'; error: string };
-
-export type AssistantContent =
-  | { type: 'text'; text: string }
-  | { type: 'tool_use'; id: string; name: string; input: unknown }
-  | { type: 'tool_result'; tool_use_id: string; content: unknown };
 
 export interface GitHubRepo {
   id: number;

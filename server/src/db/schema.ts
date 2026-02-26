@@ -26,17 +26,6 @@ export function migrate() {
       updated_at      TEXT DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS messages (
-      id              TEXT PRIMARY KEY,
-      craftsman_id    TEXT NOT NULL REFERENCES craftsmen(id),
-      role            TEXT NOT NULL,
-      content         TEXT NOT NULL,
-      cost_usd        REAL,
-      duration_ms     INTEGER,
-      created_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_messages_craftsman ON messages(craftsman_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_craftsmen_status ON craftsmen(status);
   `);
 }
