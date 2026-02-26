@@ -1,6 +1,6 @@
 import type { Craftsman, Message, Project, StatsResult } from '../types';
 
-export type Tab = 'chat' | 'logs' | 'preview';
+export type Tab = 'chat' | 'logs' | 'preview' | 'terminal';
 export type View = 'conversation' | 'settings';
 
 export interface CraftsmanUiState {
