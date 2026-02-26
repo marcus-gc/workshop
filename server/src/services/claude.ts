@@ -73,6 +73,7 @@ export async function streamMessage(
     message,
     "--output-format",
     "stream-json",
+    "--verbose",
     "--dangerously-skip-permissions",
   ];
 

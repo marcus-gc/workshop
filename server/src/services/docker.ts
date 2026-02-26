@@ -1,4 +1,6 @@
 import Docker from "dockerode";
+import fs from "node:fs";
+import crypto from "node:crypto";
 import db from "../db/client.js";
 import type { Craftsman, Project } from "../types.js";
 
@@ -7,15 +9,27 @@ const docker = new Docker();
 const CRAFTSMAN_IMAGE = "workshop-craftsman";
 
 export async function ensureCraftsmanImage(): Promise<void> {
+  const dockerfile = fs.readFileSync("/app/Dockerfile.craftsman", "utf-8");
+  const hash = crypto.createHash("sha256").update(dockerfile).digest("hex");
+
   const images = await docker.listImages({
     filters: { reference: [CRAFTSMAN_IMAGE] },
   });
-  if (images.length > 0) return;
+
+  if (images.length > 0) {
+    const existing = images[0];
+    if (existing.Labels?.["dockerfile.hash"] === hash) {
+      console.log("Craftsman image up to date.");
+      return;
+    }
+    console.log("Dockerfile.craftsman changed, removing old image...");
+    await docker.getImage(existing.Id).remove({ force: true });
+  }
 
   console.log("Building workshop-craftsman image...");
   const stream = await docker.buildImage(
     { context: "/app", src: ["Dockerfile.craftsman"] },
-    { t: CRAFTSMAN_IMAGE, dockerfile: "Dockerfile.craftsman" }
+    { t: CRAFTSMAN_IMAGE, dockerfile: "Dockerfile.craftsman", labels: { "dockerfile.hash": hash } }
   );
   await new Promise<void>((resolve, reject) => {
     docker.modem.followProgress(
