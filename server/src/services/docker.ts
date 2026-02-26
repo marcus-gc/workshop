@@ -100,11 +100,16 @@ export async function createContainer(
   return { containerId: container.id, portMappings };
 }
 
+const CONTAINER_LOG = "/tmp/workshop.log";
+
 export async function initContainer(
   containerId: string,
   project: Project
 ): Promise<void> {
   const container = docker.getContainer(containerId);
+
+  // Create log file
+  await execInContainer(container, ["touch", CONTAINER_LOG]);
 
   // Build clone URL, injecting token for private repos
   let cloneUrl = project.repo_url;
@@ -116,7 +121,7 @@ export async function initContainer(
   }
 
   // Clone the repo
-  await execInContainer(container, [
+  await loggedExec(container, [
     "git",
     "clone",
     "--branch",
@@ -127,12 +132,24 @@ export async function initContainer(
 
   // Run setup command if specified
   if (project.setup_cmd) {
-    await execInContainer(
+    await loggedExec(
       container,
       ["sh", "-c", project.setup_cmd],
       "/workspace/project"
     );
   }
+}
+
+/** Run a command and tee its output to the container log file. */
+async function loggedExec(
+  container: Docker.Container,
+  cmd: string[],
+  workingDir = "/"
+): Promise<string> {
+  // Wrap the command so stdout+stderr are appended to the log file
+  const escaped = cmd.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
+  const wrapped = `${escaped} 2>&1 | tee -a ${CONTAINER_LOG}`;
+  return execInContainer(container, ["sh", "-c", wrapped], workingDir);
 }
 
 export async function execInContainer(
@@ -256,14 +273,19 @@ export async function getContainerStats(containerId: string): Promise<{
   };
 }
 
-export function getContainerLogs(containerId: string) {
+export async function getContainerLogs(containerId: string) {
   const container = docker.getContainer(containerId);
-  return container.logs({
-    follow: true,
-    stdout: true,
-    stderr: true,
-    tail: 100,
+
+  // Ensure the log file exists (may not yet if container just started)
+  await execInContainer(container, ["touch", CONTAINER_LOG]);
+
+  const exec = await container.exec({
+    Cmd: ["tail", "-n", "100", "-f", CONTAINER_LOG],
+    AttachStdout: true,
+    AttachStderr: true,
   });
+
+  return exec.start({ hijack: true, stdin: false });
 }
 
 export async function reconcileContainers(): Promise<void> {

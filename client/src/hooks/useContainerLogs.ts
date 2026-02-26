@@ -13,6 +13,10 @@ export function useContainerLogs(
     let retryTimeout: ReturnType<typeof setTimeout> | null = null;
 
     function connect(attempt = 0) {
+      // Clear stale lines so tail's historical output doesn't duplicate
+      if (attempt === 0) {
+        dispatch({ type: 'CLEAR_LOGS', craftsmanId: craftsmanId! });
+      }
       es = new EventSource(`/api/craftsmen/${craftsmanId}/logs`);
 
       es.onmessage = (e: MessageEvent) => {

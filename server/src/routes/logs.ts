@@ -14,12 +14,23 @@ app.get("/:id/logs", async (c) => {
 
   return streamSSE(c, async (stream) => {
     const nodeStream = logStream as unknown as NodeJS.ReadableStream;
+    let rawBuffer = Buffer.alloc(0);
 
     const onData = (chunk: Buffer) => {
-      const lines = chunk.toString("utf8").split("\n");
-      for (const line of lines) {
-        if (line.trim()) {
-          stream.writeSSE({ data: line });
+      rawBuffer = Buffer.concat([rawBuffer, chunk]);
+
+      // Extract complete Docker multiplexed frames (8-byte header per frame)
+      while (rawBuffer.length >= 8) {
+        const frameSize = rawBuffer.readUInt32BE(4);
+        if (rawBuffer.length < 8 + frameSize) break;
+        const payload = rawBuffer.subarray(8, 8 + frameSize).toString("utf8");
+        rawBuffer = rawBuffer.subarray(8 + frameSize);
+
+        const lines = payload.split("\n");
+        for (const line of lines) {
+          if (line.trim()) {
+            stream.writeSSE({ data: line });
+          }
         }
       }
     };
