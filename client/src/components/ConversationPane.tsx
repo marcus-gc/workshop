@@ -8,6 +8,7 @@ import MessageList from './MessageList'
 import MessageInput from './MessageInput'
 import LogsViewer from './LogsViewer'
 import ServerPreview from './ServerPreview'
+import TerminalView from './TerminalView'
 import GitPanel from './GitPanel'
 
 interface Props {
@@ -152,15 +153,23 @@ export default function ConversationPane({ craftsmanId }: Props) {
 
       {/* Tabs */}
       <div className="tab-bar">
-        {(['chat', 'logs', 'preview'] as Tab[]).map((tab) => (
-          <button
-            key={tab}
-            className={`tab-btn${activeTab === tab ? ' active' : ''}`}
-            onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', craftsmanId, tab })}
-          >
-            {tab === 'chat' ? 'Conversation' : tab === 'logs' ? 'Logs' : 'Preview'}
-          </button>
-        ))}
+        {(['chat', 'logs', 'terminal', 'preview'] as Tab[]).map((tab) => {
+          const labels: Record<Tab, string> = {
+            chat: 'Conversation',
+            logs: 'Logs',
+            terminal: 'Terminal',
+            preview: 'Preview',
+          }
+          return (
+            <button
+              key={tab}
+              className={`tab-btn${activeTab === tab ? ' active' : ''}`}
+              onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', craftsmanId, tab })}
+            >
+              {labels[tab]}
+            </button>
+          )
+        })}
       </div>
 
       {/* Tab content */}
@@ -185,6 +194,10 @@ export default function ConversationPane({ craftsmanId }: Props) {
           logLines={ui?.logLines ?? []}
           onClear={() => dispatch({ type: 'CLEAR_LOGS', craftsmanId })}
         />
+      )}
+
+      {activeTab === 'terminal' && (
+        <TerminalView craftsmanId={craftsmanId} isRunning={isRunning} />
       )}
 
       {activeTab === 'preview' && (

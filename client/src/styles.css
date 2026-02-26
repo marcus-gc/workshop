@@ -518,6 +518,27 @@ body {
   font-size: 13px;
 }
 
+/* ── Terminal pane ─────────────────────────────────────────────────────────── */
+.terminal-container {
+  flex: 1;
+  min-height: 0;
+  padding: 4px;
+  background: #1a1a2e;
+}
+
+.terminal-container .xterm {
+  height: 100%;
+}
+
+.terminal-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dimmed);
+  font-size: 13px;
+}
+
 /* ── Preview pane ──────────────────────────────────────────────────────────── */
 .preview-pane {
   flex: 1;
