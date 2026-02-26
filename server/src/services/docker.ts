@@ -153,6 +153,79 @@ export async function removeContainer(containerId: string): Promise<void> {
   await container.remove();
 }
 
+export async function getGitDiff(containerId: string): Promise<{ diff: string; stat: string }> {
+  const container = docker.getContainer(containerId);
+  const [diff, stat] = await Promise.all([
+    execInContainer(container, ["git", "diff", "HEAD"], "/workspace/project"),
+    execInContainer(container, ["git", "diff", "--stat", "HEAD"], "/workspace/project"),
+  ]);
+  return { diff, stat };
+}
+
+export async function gitCommit(
+  containerId: string,
+  message: string
+): Promise<string> {
+  const container = docker.getContainer(containerId);
+  await execInContainer(container, ["git", "add", "-A"], "/workspace/project");
+  return execInContainer(
+    container,
+    [
+      "git",
+      "-c", "user.name=Workshop",
+      "-c", "user.email=workshop@local",
+      "commit",
+      "-m", message,
+    ],
+    "/workspace/project"
+  );
+}
+
+export async function gitPush(
+  containerId: string,
+  branchName: string
+): Promise<string> {
+  const container = docker.getContainer(containerId);
+  return execInContainer(
+    container,
+    ["git", "push", "origin", `HEAD:${branchName}`, "--force"],
+    "/workspace/project"
+  );
+}
+
+export async function getContainerStats(containerId: string): Promise<{
+  cpu_percent: number;
+  memory_mb: number;
+  memory_limit_mb: number;
+  pids: number;
+}> {
+  const container = docker.getContainer(containerId);
+  const stats = (await container.stats({ stream: false })) as any;
+
+  const cpuDelta =
+    stats.cpu_stats.cpu_usage.total_usage -
+    stats.precpu_stats.cpu_usage.total_usage;
+  const systemDelta =
+    (stats.cpu_stats.system_cpu_usage ?? 0) -
+    (stats.precpu_stats.system_cpu_usage ?? 0);
+  const numCpus =
+    stats.cpu_stats.online_cpus ??
+    stats.cpu_stats.cpu_usage.percpu_usage?.length ??
+    1;
+  const cpuPercent =
+    systemDelta > 0 ? (cpuDelta / systemDelta) * numCpus * 100 : 0;
+
+  const memoryMb = (stats.memory_stats.usage ?? 0) / 1_048_576;
+  const memoryLimitMb = (stats.memory_stats.limit ?? 0) / 1_048_576;
+
+  return {
+    cpu_percent: Math.round(cpuPercent * 100) / 100,
+    memory_mb: Math.round(memoryMb * 10) / 10,
+    memory_limit_mb: Math.round(memoryLimitMb),
+    pids: stats.pids_stats?.current ?? 0,
+  };
+}
+
 export function getContainerLogs(containerId: string) {
   const container = docker.getContainer(containerId);
   return container.logs({

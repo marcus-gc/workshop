@@ -38,3 +38,8 @@ export interface ClaudeResponse {
   cost_usd: number;
   duration_ms: number;
 }
+
+export interface StreamEvent {
+  type: string;
+  [key: string]: unknown;
+}

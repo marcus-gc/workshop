@@ -9,6 +9,7 @@ import {
   startContainer,
   removeContainer,
 } from "../services/docker.js";
+import { emitStatusChange } from "../services/events.js";
 
 const app = new Hono();
 
@@ -44,12 +45,14 @@ app.post("/", async (c) => {
       db.prepare(
         "UPDATE craftsmen SET status = 'running', updated_at = datetime('now') WHERE id = ?"
       ).run(id);
+      emitStatusChange(id, "running");
       console.log(`Craftsman ${name} is running.`);
     } catch (err: any) {
       console.error(`Failed to start craftsman ${name}:`, err);
       db.prepare(
         "UPDATE craftsmen SET status = 'error', error_message = ?, updated_at = datetime('now') WHERE id = ?"
       ).run(err.message, id);
+      emitStatusChange(id, "error", { error_message: err.message });
     }
   })();
 
@@ -76,6 +79,7 @@ app.post("/:id/stop", async (c) => {
   db.prepare(
     "UPDATE craftsmen SET status = 'stopped', updated_at = datetime('now') WHERE id = ?"
   ).run(craftsman.id);
+  emitStatusChange(craftsman.id, "stopped");
 
   return c.json({ ...craftsman, status: "stopped" });
 });
@@ -89,6 +93,7 @@ app.post("/:id/start", async (c) => {
   db.prepare(
     "UPDATE craftsmen SET status = 'running', updated_at = datetime('now') WHERE id = ?"
   ).run(craftsman.id);
+  emitStatusChange(craftsman.id, "running");
 
   return c.json({ ...craftsman, status: "running" });
 });
