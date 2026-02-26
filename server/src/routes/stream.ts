@@ -58,7 +58,7 @@ app.post("/:id/messages/stream", async (c) => {
 
       await stream.writeSSE({
         event: "done",
-        data: JSON.stringify({ ...response, message_id: assistantMsgId }),
+        data: JSON.stringify({ type: "done", ...response, message_id: assistantMsgId }),
       });
     } catch (err: any) {
       await stream.writeSSE({
