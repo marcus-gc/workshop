@@ -85,6 +85,10 @@ export async function createContainer(
     portMappings[String(port)] = hostPort;
   }
 
+  const workspaceDir = `/craftsmen/${craftsman.name}`;
+  fs.mkdirSync(workspaceDir, { recursive: true });
+  fs.chmodSync(workspaceDir, 0o777);
+
   const container = await docker.createContainer({
     Image: CRAFTSMAN_IMAGE,
     name: `workshop-craftsman-${craftsman.name}`,
@@ -92,6 +96,7 @@ export async function createContainer(
     ExposedPorts: exposedPorts,
     HostConfig: {
       PortBindings: portBindings,
+      Binds: [`${workspaceDir}:/workspace/project`],
     },
   });
 
