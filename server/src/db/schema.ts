@@ -21,6 +21,7 @@ export function migrate() {
       status          TEXT DEFAULT 'pending',
       error_message   TEXT,
       session_id      TEXT,
+      ports           TEXT DEFAULT NULL,
       port_mappings   TEXT DEFAULT '{}',
       created_at      TEXT DEFAULT (datetime('now')),
       updated_at      TEXT DEFAULT (datetime('now'))

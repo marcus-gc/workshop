@@ -17,6 +17,7 @@ export interface Craftsman {
   status: 'pending' | 'starting' | 'running' | 'stopped' | 'error';
   error_message: string | null;
   session_id: string | null;
+  ports: string | null; // JSON array string or null (inherit from project)
   port_mappings: string; // JSON object string e.g. {"3000": 32768}
   created_at: string;
   updated_at: string;
@@ -69,6 +70,7 @@ export interface CreateProjectPayload {
 export interface CreateCraftsmanPayload {
   name: string;
   project_id: string;
+  ports?: number[];
 }
 
 export interface GitHubRepo {

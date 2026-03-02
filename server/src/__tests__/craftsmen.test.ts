@@ -1,7 +1,7 @@
 import "./setup.js";
 import { describe, it, expect, vi } from "vitest";
 import { migrate } from "../db/schema.js";
-import { request, json, createProject, createCraftsman, createRunningCraftsman } from "./helpers.js";
+import { request, json, createProject, createCraftsman, createRunningCraftsman, createCraftsmanWithStatus } from "./helpers.js";
 
 migrate();
 
@@ -63,6 +63,44 @@ describe("Craftsmen API", () => {
         "fake-container-id-123",
         expect.objectContaining({ id: project.id })
       );
+    });
+
+    it("creates a craftsman with custom ports", async () => {
+      const project = await createProject();
+
+      const res = await request("POST", "/api/craftsmen", {
+        name: "custom-ports",
+        project_id: project.id,
+        ports: [8080, 9090],
+      });
+
+      expect(res.status).toBe(201);
+      const body = await json(res);
+      expect(body.ports).toBe("[8080,9090]");
+    });
+
+    it("creates a craftsman without ports (inherits project defaults)", async () => {
+      const project = await createProject();
+
+      const res = await request("POST", "/api/craftsmen", {
+        name: "default-ports",
+        project_id: project.id,
+      });
+
+      expect(res.status).toBe(201);
+      const body = await json(res);
+      expect(body.ports).toBeNull();
+    });
+
+    it("returns 400 for invalid ports", async () => {
+      const project = await createProject();
+
+      const res = await request("POST", "/api/craftsmen", {
+        name: "bad-ports",
+        project_id: project.id,
+        ports: "not-an-array",
+      });
+      expect(res.status).toBe(400);
     });
   });
 
@@ -160,6 +198,69 @@ describe("Craftsmen API", () => {
       const body = await json(res);
       expect(body.status).toBe("running");
       expect(docker.startContainer).toHaveBeenCalledWith("fake-container-id-123");
+    });
+  });
+
+  describe("PATCH /api/craftsmen/:id", () => {
+    it("updates ports on a stopped craftsman", async () => {
+      const project = await createProject();
+      const craftsman = await createCraftsmanWithStatus(project.id, "stopped-alice", "stopped");
+
+      const res = await request("PATCH", `/api/craftsmen/${craftsman.id}`, {
+        ports: [4000, 5000],
+      });
+
+      expect(res.status).toBe(200);
+      const body = await json(res);
+      expect(body.ports).toBe("[4000,5000]");
+      expect(body.status).toBe("starting");
+    });
+
+    it("rejects update on a running craftsman", async () => {
+      const project = await createProject();
+      await createRunningCraftsman(project.id, "running-alice");
+
+      const res = await request("PATCH", "/api/craftsmen/running-alice", {
+        ports: [4000],
+      });
+      expect(res.status).toBe(409);
+    });
+
+    it("rejects invalid ports (non-array)", async () => {
+      const project = await createProject();
+      const craftsman = await createCraftsmanWithStatus(project.id, "stopped-bob", "stopped");
+
+      const res = await request("PATCH", `/api/craftsmen/${craftsman.id}`, {
+        ports: "not-an-array",
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects invalid ports (out of range)", async () => {
+      const project = await createProject();
+      const craftsman = await createCraftsmanWithStatus(project.id, "stopped-charlie", "stopped");
+
+      const res = await request("PATCH", `/api/craftsmen/${craftsman.id}`, {
+        ports: [0, 70000],
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects duplicate ports", async () => {
+      const project = await createProject();
+      const craftsman = await createCraftsmanWithStatus(project.id, "stopped-dave", "stopped");
+
+      const res = await request("PATCH", `/api/craftsmen/${craftsman.id}`, {
+        ports: [3000, 3000],
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 404 for nonexistent craftsman", async () => {
+      const res = await request("PATCH", "/api/craftsmen/nobody", {
+        ports: [3000],
+      });
+      expect(res.status).toBe(404);
     });
   });
 

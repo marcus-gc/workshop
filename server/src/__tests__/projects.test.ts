@@ -123,6 +123,94 @@ describe("Projects API", () => {
     });
   });
 
+  describe("PATCH /api/projects/:id", () => {
+    it("updates ports on an existing project", async () => {
+      const project = await createProject({ ports: [] });
+
+      const res = await request("PATCH", `/api/projects/${project.id}`, {
+        ports: [3000, 8080],
+      });
+
+      expect(res.status).toBe(200);
+      const body = await json(res);
+      expect(body.ports).toBe("[3000,8080]");
+      expect(body.id).toBe(project.id);
+    });
+
+    it("returns 404 for nonexistent project", async () => {
+      const res = await request(
+        "PATCH",
+        "/api/projects/00000000-0000-0000-0000-000000000000",
+        { ports: [3000] }
+      );
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 400 when ports is not an array", async () => {
+      const project = await createProject();
+
+      const res = await request("PATCH", `/api/projects/${project.id}`, {
+        ports: "3000",
+      });
+      expect(res.status).toBe(400);
+      const body = await json(res);
+      expect(body.error).toMatch(/array/i);
+    });
+
+    it("returns 400 for invalid port numbers", async () => {
+      const project = await createProject();
+
+      const res = await request("PATCH", `/api/projects/${project.id}`, {
+        ports: [0],
+      });
+      expect(res.status).toBe(400);
+
+      const res2 = await request("PATCH", `/api/projects/${project.id}`, {
+        ports: [70000],
+      });
+      expect(res2.status).toBe(400);
+
+      const res3 = await request("PATCH", `/api/projects/${project.id}`, {
+        ports: [3.5],
+      });
+      expect(res3.status).toBe(400);
+    });
+
+    it("returns 400 for duplicate ports", async () => {
+      const project = await createProject();
+
+      const res = await request("PATCH", `/api/projects/${project.id}`, {
+        ports: [3000, 3000],
+      });
+      expect(res.status).toBe(400);
+      const body = await json(res);
+      expect(body.error).toMatch(/duplicate/i);
+    });
+
+    it("allows setting ports to empty array", async () => {
+      const project = await createProject({ ports: [3000] });
+
+      const res = await request("PATCH", `/api/projects/${project.id}`, {
+        ports: [],
+      });
+      expect(res.status).toBe(200);
+      const body = await json(res);
+      expect(body.ports).toBe("[]");
+    });
+
+    it("redacts github_token from response", async () => {
+      const project = await createProject({ github_token: "ghp_secret" });
+
+      const res = await request("PATCH", `/api/projects/${project.id}`, {
+        ports: [4000],
+      });
+      expect(res.status).toBe(200);
+      const body = await json(res);
+      expect(body.github_token).toBeUndefined();
+      expect(body.has_github_token).toBe(true);
+    });
+  });
+
   describe("DELETE /api/projects/:id", () => {
     it("deletes a project", async () => {
       const project = await createProject();

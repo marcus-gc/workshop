@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import {
   listProjects,
   createProject,
+  updateProject,
   deleteProject,
   validateGitHubToken,
   listGitHubRepos,
@@ -25,6 +26,10 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [importingId, setImportingId] = useState<number | null>(null)
+  const [editingPortsId, setEditingPortsId] = useState<string | null>(null)
+  const [portInput, setPortInput] = useState('')
+  const [portError, setPortError] = useState<string | null>(null)
+  const [savingPorts, setSavingPorts] = useState(false)
 
   useEffect(() => {
     refreshProjects()
@@ -96,6 +101,42 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
       onProjectsChanged()
     } catch (err: unknown) {
       setSyncError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  async function handleAddPort(projectId: string, currentPorts: number[]) {
+    const num = Number(portInput)
+    if (!Number.isInteger(num) || num < 1 || num > 65535) {
+      setPortError('Port must be an integer between 1 and 65535')
+      return
+    }
+    if (currentPorts.includes(num)) {
+      setPortError('Port already exists')
+      return
+    }
+    setPortError(null)
+    setSavingPorts(true)
+    try {
+      const updated = await updateProject(projectId, { ports: [...currentPorts, num] })
+      setProjects((prev) => prev.map((p) => (p.id === projectId ? updated : p)))
+      setPortInput('')
+    } catch (err: unknown) {
+      setPortError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSavingPorts(false)
+    }
+  }
+
+  async function handleRemovePort(projectId: string, currentPorts: number[], port: number) {
+    setSavingPorts(true)
+    setPortError(null)
+    try {
+      const updated = await updateProject(projectId, { ports: currentPorts.filter((p) => p !== port) })
+      setProjects((prev) => prev.map((p) => (p.id === projectId ? updated : p)))
+    } catch (err: unknown) {
+      setPortError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSavingPorts(false)
     }
   }
 
@@ -180,12 +221,76 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
                     </td>
                     <td style={{ color: 'var(--text-secondary)' }}>{p.branch}</td>
                     <td>
-                      {noPorts ? (
-                        <span className="tag no-ports">No ports</span>
+                      {editingPortsId === p.id ? (
+                        <div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 6 }}>
+                            {ports.map((port) => (
+                              <span key={port} className="tag" style={{ marginRight: 0 }}>
+                                :{port}
+                                <button
+                                  className="tag-remove"
+                                  onClick={() => handleRemovePort(p.id, ports, port)}
+                                  disabled={savingPorts}
+                                  title={`Remove port ${port}`}
+                                >
+                                  x
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                            <input
+                              className="form-input"
+                              type="number"
+                              min={1}
+                              max={65535}
+                              value={portInput}
+                              onChange={(e) => { setPortInput(e.target.value); setPortError(null) }}
+                              onKeyDown={(e) => { if (e.key === 'Enter') handleAddPort(p.id, ports) }}
+                              placeholder="Port"
+                              style={{ width: 80, padding: '3px 6px', fontSize: 11 }}
+                              disabled={savingPorts}
+                            />
+                            <button
+                              className="btn btn-primary"
+                              style={{ fontSize: 11, padding: '2px 8px' }}
+                              onClick={() => handleAddPort(p.id, ports)}
+                              disabled={savingPorts || !portInput}
+                            >
+                              Add
+                            </button>
+                            <button
+                              className="btn btn-ghost"
+                              style={{ fontSize: 11, padding: '2px 8px' }}
+                              onClick={() => { setEditingPortsId(null); setPortInput(''); setPortError(null) }}
+                            >
+                              Done
+                            </button>
+                          </div>
+                          {portError && (
+                            <div style={{ color: 'var(--status-error)', fontSize: 11, marginTop: 4 }}>{portError}</div>
+                          )}
+                          <div style={{ color: 'var(--text-dimmed)', fontSize: 10, marginTop: 4 }}>
+                            Changes apply to newly created craftsmen only.
+                          </div>
+                        </div>
                       ) : (
-                        ports.map((port) => (
-                          <span key={port} className="tag" style={{ marginRight: 3 }}>:{port}</span>
-                        ))
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {noPorts ? (
+                            <span className="tag no-ports">No ports</span>
+                          ) : (
+                            ports.map((port) => (
+                              <span key={port} className="tag" style={{ marginRight: 0 }}>:{port}</span>
+                            ))
+                          )}
+                          <button
+                            className="btn btn-ghost"
+                            style={{ fontSize: 10, padding: '1px 6px', marginLeft: 2 }}
+                            onClick={() => { setEditingPortsId(p.id); setPortInput(''); setPortError(null) }}
+                          >
+                            Edit
+                          </button>
+                        </div>
                       )}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>

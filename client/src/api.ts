@@ -37,6 +37,10 @@ export function createProject(data: CreateProjectPayload): Promise<Project> {
   return request('/api/projects', { method: 'POST', body: JSON.stringify(data) });
 }
 
+export function updateProject(id: string, data: { ports?: number[] }): Promise<Project> {
+  return request(`/api/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
 export function deleteProject(id: string): Promise<void> {
   return request(`/api/projects/${id}`, { method: 'DELETE' });
 }
@@ -61,6 +65,10 @@ export function stopCraftsman(id: string): Promise<void> {
 
 export function startCraftsman(id: string): Promise<void> {
   return request(`/api/craftsmen/${id}/start`, { method: 'POST' });
+}
+
+export function updateCraftsman(id: string, data: { ports: number[] }): Promise<Craftsman> {
+  return request(`/api/craftsmen/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
 }
 
 export function deleteCraftsman(id: string): Promise<void> {

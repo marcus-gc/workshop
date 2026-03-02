@@ -17,6 +17,7 @@ export interface Craftsman {
   status: "pending" | "starting" | "running" | "stopped" | "error";
   error_message: string | null;
   session_id: string | null;
+  ports: string | null; // JSON array or null (inherit from project)
   port_mappings: string; // JSON object
   created_at: string;
   updated_at: string;

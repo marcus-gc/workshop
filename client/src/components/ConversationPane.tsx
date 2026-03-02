@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAppState, useAppDispatch } from '../store/AppContext'
 import { useContainerLogs } from '../hooks/useContainerLogs'
-import { stopCraftsman, startCraftsman, deleteCraftsman, getStats } from '../api'
+import { stopCraftsman, startCraftsman, deleteCraftsman, updateCraftsman, getStats } from '../api'
 import type { Tab } from '../store/reducer'
 import LogsViewer from './LogsViewer'
 import ServerPreview from './ServerPreview'
@@ -19,6 +19,11 @@ export default function ConversationPane({ craftsmanId }: Props) {
   const [showGit, setShowGit] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [isActioning, setIsActioning] = useState(false)
+  const [editingPorts, setEditingPorts] = useState(false)
+  const [editPorts, setEditPorts] = useState<number[]>([])
+  const [portInput, setPortInput] = useState('')
+  const [portError, setPortError] = useState<string | null>(null)
+  const [portSaving, setPortSaving] = useState(false)
 
   const craftsman = state.craftsmen.find((c) => c.id === craftsmanId)
   const project = craftsman ? state.projects.find((p) => p.id === craftsman.project_id) : null
@@ -82,6 +87,47 @@ export default function ConversationPane({ craftsmanId }: Props) {
     }
   }
 
+  function handleEditPorts() {
+    if (!craftsman) return
+    const currentPorts: number[] = craftsman.ports
+      ? JSON.parse(craftsman.ports)
+      : (project ? JSON.parse(project.ports) : [])
+    setEditPorts(currentPorts)
+    setPortInput('')
+    setPortError(null)
+    setEditingPorts(true)
+  }
+
+  function handleAddPort() {
+    const num = Number(portInput)
+    if (!Number.isInteger(num) || num < 1 || num > 65535) {
+      setPortError('Port must be an integer between 1 and 65535')
+      return
+    }
+    if (editPorts.includes(num)) {
+      setPortError('Port already exists')
+      return
+    }
+    setPortError(null)
+    setEditPorts([...editPorts, num])
+    setPortInput('')
+  }
+
+  async function handleSavePorts() {
+    if (!confirm('This will recreate the container with a fresh clone and setup. Continue?')) return
+    setPortSaving(true)
+    setPortError(null)
+    try {
+      const updated = await updateCraftsman(craftsmanId, { ports: editPorts })
+      dispatch({ type: 'UPDATE_CRAFTSMAN', craftsman: updated })
+      setEditingPorts(false)
+    } catch (err: unknown) {
+      setPortError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPortSaving(false)
+    }
+  }
+
   if (!craftsman) return null
 
   const stats = ui?.stats
@@ -115,13 +161,22 @@ export default function ConversationPane({ craftsmanId }: Props) {
               Stop
             </button>
           ) : craftsman.status === 'stopped' ? (
-            <button
-              className="header-btn primary"
-              onClick={handleStart}
-              disabled={isActioning}
-            >
-              Start
-            </button>
+            <>
+              <button
+                className="header-btn"
+                onClick={handleEditPorts}
+                disabled={isActioning || editingPorts}
+              >
+                Edit Ports
+              </button>
+              <button
+                className="header-btn primary"
+                onClick={handleStart}
+                disabled={isActioning}
+              >
+                Start
+              </button>
+            </>
           ) : null}
           {(craftsman.status === 'stopped' || craftsman.status === 'error') && (
             <button
@@ -134,6 +189,63 @@ export default function ConversationPane({ craftsmanId }: Props) {
           )}
         </div>
       </div>
+
+      {editingPorts && (
+        <div className="port-editor-row" style={{ padding: '8px 16px', borderBottom: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+          {editPorts.map((port) => (
+            <span key={port} className="tag" style={{ marginRight: 0 }}>
+              :{port}
+              <button
+                className="tag-remove"
+                onClick={() => setEditPorts(editPorts.filter((p) => p !== port))}
+                disabled={portSaving}
+                title={`Remove port ${port}`}
+              >
+                x
+              </button>
+            </span>
+          ))}
+          <input
+            className="form-input"
+            type="number"
+            min={1}
+            max={65535}
+            value={portInput}
+            onChange={(e) => { setPortInput(e.target.value); setPortError(null) }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddPort() } }}
+            placeholder="Port"
+            style={{ width: 80, padding: '3px 6px', fontSize: 11 }}
+            disabled={portSaving}
+          />
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: 11, padding: '2px 8px' }}
+            onClick={handleAddPort}
+            disabled={portSaving || !portInput}
+          >
+            Add
+          </button>
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: 11, padding: '2px 8px' }}
+            onClick={handleSavePorts}
+            disabled={portSaving}
+          >
+            {portSaving ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 11, padding: '2px 8px' }}
+            onClick={() => { setEditingPorts(false); setPortError(null) }}
+            disabled={portSaving}
+          >
+            Cancel
+          </button>
+          {portError && (
+            <div style={{ color: 'var(--status-error)', fontSize: 11, width: '100%' }}>{portError}</div>
+          )}
+        </div>
+      )}
 
       {actionError && <div className="error-banner">{actionError}</div>}
       {craftsman.error_message && (

@@ -34,6 +34,34 @@ app.get("/:id", (c) => {
   return c.json(redactProject(project));
 });
 
+app.patch("/:id", async (c) => {
+  const id = c.req.param("id");
+  const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as Project | undefined;
+  if (!project) return c.json({ error: "Project not found" }, 404);
+
+  const body = await c.req.json();
+  const { ports } = body;
+
+  if (!Array.isArray(ports)) {
+    return c.json({ error: "ports must be an array" }, 400);
+  }
+
+  for (const p of ports) {
+    if (!Number.isInteger(p) || p < 1 || p > 65535) {
+      return c.json({ error: "each port must be an integer between 1 and 65535" }, 400);
+    }
+  }
+
+  if (new Set(ports).size !== ports.length) {
+    return c.json({ error: "ports must not contain duplicates" }, 400);
+  }
+
+  db.prepare("UPDATE projects SET ports = ? WHERE id = ?").run(JSON.stringify(ports), id);
+
+  const updated = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as Project;
+  return c.json(redactProject(updated));
+});
+
 app.delete("/:id", (c) => {
   const id = c.req.param("id");
   const craftsmen = db

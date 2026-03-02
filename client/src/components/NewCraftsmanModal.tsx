@@ -14,6 +14,12 @@ export default function NewCraftsmanModal({ projects, onClose, onCreated }: Prop
   const [step, setStep] = useState<Step>('form')
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [name, setName] = useState('')
+  const [ports, setPorts] = useState<number[]>(() => {
+    const p = projects[0]
+    return p ? (JSON.parse(p.ports) as number[]) : []
+  })
+  const [portInput, setPortInput] = useState('')
+  const [portError, setPortError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [craftsman, setCraftsman] = useState<Craftsman | null>(null)
@@ -37,6 +43,21 @@ export default function NewCraftsmanModal({ projects, onClose, onCreated }: Prop
     }
   }, [])
 
+  function handleAddPort() {
+    const num = Number(portInput)
+    if (!Number.isInteger(num) || num < 1 || num > 65535) {
+      setPortError('Port must be an integer between 1 and 65535')
+      return
+    }
+    if (ports.includes(num)) {
+      setPortError('Port already exists')
+      return
+    }
+    setPortError(null)
+    setPorts([...ports, num])
+    setPortInput('')
+  }
+
   async function handleCreate() {
     const trimmedName = name.trim()
     if (!trimmedName || !projectId) return
@@ -48,7 +69,7 @@ export default function NewCraftsmanModal({ projects, onClose, onCreated }: Prop
     setCreating(true)
     setError(null)
     try {
-      const c = await createCraftsman({ name: trimmedName, project_id: projectId })
+      const c = await createCraftsman({ name: trimmedName, project_id: projectId, ports })
       setCraftsman(c)
       setStep('starting')
       subscribeToEvents(c)
@@ -126,7 +147,11 @@ export default function NewCraftsmanModal({ projects, onClose, onCreated }: Prop
                   <select
                     className="form-select"
                     value={projectId}
-                    onChange={(e) => setProjectId(e.target.value)}
+                    onChange={(e) => {
+                      setProjectId(e.target.value)
+                      const p = projects.find((p) => p.id === e.target.value)
+                      if (p) setPorts(JSON.parse(p.ports) as number[])
+                    }}
                   >
                     {projects.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -153,6 +178,59 @@ export default function NewCraftsmanModal({ projects, onClose, onCreated }: Prop
                   />
                   <div style={{ fontSize: 11, color: 'var(--text-dimmed)', marginTop: 4 }}>
                     Lowercase letters, numbers, and hyphens only
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Ports</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 6 }}>
+                    {ports.map((port) => (
+                      <span key={port} className="tag" style={{ marginRight: 0 }}>
+                        :{port}
+                        <button
+                          className="tag-remove"
+                          onClick={() => setPorts(ports.filter((p) => p !== port))}
+                          title={`Remove port ${port}`}
+                        >
+                          x
+                        </button>
+                      </span>
+                    ))}
+                    {ports.length === 0 && (
+                      <span className="tag no-ports">No ports</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <input
+                      className="form-input"
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={portInput}
+                      onChange={(e) => { setPortInput(e.target.value); setPortError(null) }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleAddPort()
+                        }
+                      }}
+                      placeholder="Port"
+                      style={{ width: 80, padding: '3px 6px', fontSize: 11 }}
+                    />
+                    <button
+                      className="btn btn-primary"
+                      style={{ fontSize: 11, padding: '2px 8px' }}
+                      onClick={handleAddPort}
+                      disabled={!portInput}
+                    >
+                      Add
+                    </button>
+                  </div>
+                  {portError && (
+                    <div style={{ color: 'var(--status-error)', fontSize: 11, marginTop: 4 }}>{portError}</div>
+                  )}
+                  <div style={{ fontSize: 11, color: 'var(--text-dimmed)', marginTop: 4 }}>
+                    Container ports to expose. Pre-filled from project defaults.
                   </div>
                 </div>
 

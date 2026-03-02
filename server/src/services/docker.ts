@@ -70,9 +70,9 @@ export async function ensureCraftsmanImage(): Promise<void> {
 
 export async function createContainer(
   craftsman: Craftsman,
-  project: Project
+  project: Project,
+  ports: number[]
 ): Promise<{ containerId: string; portMappings: Record<string, number> }> {
-  const ports = JSON.parse(project.ports) as number[];
   const exposedPorts: Record<string, object> = {};
   const portBindings: Record<string, Array<{ HostPort: string; HostIp: string }>> = {};
 
