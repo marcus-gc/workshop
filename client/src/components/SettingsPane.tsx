@@ -31,6 +31,15 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
   const [portError, setPortError] = useState<string | null>(null)
   const [savingPorts, setSavingPorts] = useState(false)
 
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [addRepoUrl, setAddRepoUrl] = useState('')
+  const [addName, setAddName] = useState('')
+  const [addNameTouched, setAddNameTouched] = useState(false)
+  const [addBranch, setAddBranch] = useState('main')
+  const [addSetupCmd, setAddSetupCmd] = useState('')
+  const [addError, setAddError] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+
   useEffect(() => {
     refreshProjects()
     // Validate saved token on mount
@@ -137,6 +146,50 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
       setPortError(err instanceof Error ? err.message : String(err))
     } finally {
       setSavingPorts(false)
+    }
+  }
+
+  function handleAddRepoUrlChange(url: string) {
+    setAddRepoUrl(url)
+    if (!addNameTouched) {
+      const match = url.match(/\/([^/]+?)(?:\.git)?$/)
+      setAddName(match ? match[1] : '')
+    }
+  }
+
+  async function handleAddProject() {
+    setAddError(null)
+    if (!addRepoUrl.trim()) {
+      setAddError('Repository URL is required')
+      return
+    }
+    if (!addName.trim()) {
+      setAddError('Project name is required')
+      return
+    }
+    setAdding(true)
+    try {
+      await createProject({
+        name: addName.trim(),
+        repo_url: addRepoUrl.trim(),
+        branch: addBranch.trim() || 'main',
+        github_token: token || undefined,
+        setup_cmd: addSetupCmd.trim() || undefined,
+        ports: [],
+      })
+      await refreshProjects()
+      onProjectsChanged()
+      setShowAddForm(false)
+      setAddRepoUrl('')
+      setAddName('')
+      setAddNameTouched(false)
+      setAddBranch('main')
+      setAddSetupCmd('')
+      setAddError(null)
+    } catch (err: unknown) {
+      setAddError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setAdding(false)
     }
   }
 
@@ -310,6 +363,80 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
         ) : (
           <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
             No projects yet. Import from GitHub or add one manually below.
+          </div>
+        )}
+
+        {!showAddForm ? (
+          <button
+            className="btn btn-primary"
+            style={{ marginBottom: 8 }}
+            onClick={() => setShowAddForm(true)}
+          >
+            Add Project
+          </button>
+        ) : (
+          <div style={{ marginBottom: 8, padding: 12, border: '1px solid var(--border)', borderRadius: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input
+                className="form-input"
+                type="text"
+                value={addRepoUrl}
+                onChange={(e) => handleAddRepoUrlChange(e.target.value)}
+                placeholder="Repository URL (e.g. https://github.com/owner/repo.git)"
+                disabled={adding}
+              />
+              <input
+                className="form-input"
+                type="text"
+                value={addName}
+                onChange={(e) => { setAddName(e.target.value); setAddNameTouched(true) }}
+                placeholder="Project name"
+                disabled={adding}
+              />
+              <input
+                className="form-input"
+                type="text"
+                value={addBranch}
+                onChange={(e) => setAddBranch(e.target.value)}
+                placeholder="Branch (default: main)"
+                disabled={adding}
+              />
+              <input
+                className="form-input"
+                type="text"
+                value={addSetupCmd}
+                onChange={(e) => setAddSetupCmd(e.target.value)}
+                placeholder="Setup command (optional)"
+                disabled={adding}
+              />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleAddProject}
+                  disabled={adding}
+                >
+                  {adding ? 'Adding…' : 'Add'}
+                </button>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    setShowAddForm(false)
+                    setAddRepoUrl('')
+                    setAddName('')
+                    setAddNameTouched(false)
+                    setAddBranch('main')
+                    setAddSetupCmd('')
+                    setAddError(null)
+                  }}
+                  disabled={adding}
+                >
+                  Cancel
+                </button>
+                {addError && (
+                  <span style={{ color: 'var(--status-error)', fontSize: 12 }}>{addError}</span>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

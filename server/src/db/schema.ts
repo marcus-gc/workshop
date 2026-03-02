@@ -1,5 +1,12 @@
 import db from "./client.js";
 
+function addColumnIfMissing(table: string, column: string, definition: string) {
+  const cols = db.pragma(`table_info(${table})`) as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 export function migrate() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS projects (
@@ -29,4 +36,9 @@ export function migrate() {
 
     CREATE INDEX IF NOT EXISTS idx_craftsmen_status ON craftsmen(status);
   `);
+
+  // Backfill columns added after initial schema
+  addColumnIfMissing("projects", "ports", "TEXT DEFAULT '[]'");
+  addColumnIfMissing("craftsmen", "ports", "TEXT DEFAULT NULL");
+  addColumnIfMissing("craftsmen", "port_mappings", "TEXT DEFAULT '{}'");
 }
