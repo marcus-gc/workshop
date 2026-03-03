@@ -11,7 +11,7 @@ RUN useradd -m -s /bin/bash craftsman \
 WORKDIR /workspace
 USER craftsman
 
-# Pre-configure Claude Code to skip interactive login/onboarding
-RUN echo '{"hasCompletedOnboarding":true}' > /home/craftsman/.claude.json
+# Pre-configure Claude Code to skip interactive onboarding + project trust dialog.
+RUN echo '{"hasCompletedOnboarding":true,"projects":{"/workspace/project":{"hasTrustDialogAccepted":true,"allowedTools":[],"mcpContextUris":[],"mcpServers":{},"enabledMcpjsonServers":[],"disabledMcpjsonServers":[]}}}' > /home/craftsman/.claude.json
 
 CMD ["tail", "-f", "/dev/null"]
