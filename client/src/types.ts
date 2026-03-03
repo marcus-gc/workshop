@@ -18,6 +18,7 @@ export interface Craftsman {
   error_message: string | null;
   session_id: string | null;
   port_mappings: string; // JSON object string e.g. {"3000": 32768}
+  task: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -69,6 +70,7 @@ export interface CreateProjectPayload {
 export interface CreateCraftsmanPayload {
   name: string;
   project_id: string;
+  task?: string;
 }
 
 export interface GitHubRepo {

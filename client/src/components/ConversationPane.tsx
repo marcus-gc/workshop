@@ -94,6 +94,11 @@ export default function ConversationPane({ craftsmanId }: Props) {
         <span className={`status-dot ${craftsman.status}`} />
         <h2>{craftsman.name}</h2>
         {project && <span className="project-label">{project.name}</span>}
+        {craftsman.task && (
+          <span className="task-label" title={craftsman.task} style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 300 }}>
+            Task: {craftsman.task.length > 60 ? craftsman.task.slice(0, 60) + '…' : craftsman.task}
+          </span>
+        )}
         <span className={`status-badge ${craftsman.status}`}>{craftsman.status}</span>
 
         {stats && (

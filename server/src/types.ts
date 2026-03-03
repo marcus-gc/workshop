@@ -18,6 +18,7 @@ export interface Craftsman {
   error_message: string | null;
   session_id: string | null;
   port_mappings: string; // JSON object
+  task: string | null;
   created_at: string;
   updated_at: string;
 }

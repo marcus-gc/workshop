@@ -314,4 +314,29 @@ export async function reconcileContainers(): Promise<void> {
   }
 }
 
+export async function startClaudeWithTask(
+  containerId: string,
+  task: string
+): Promise<void> {
+  const container = docker.getContainer(containerId);
+
+  // Write task to file via base64 to avoid all shell escaping issues
+  const b64 = Buffer.from(task).toString("base64");
+  await execInContainer(container, [
+    "sh",
+    "-c",
+    `echo '${b64}' | base64 -d > /tmp/task.txt`,
+  ]);
+
+  // Start Claude Code in the existing tmux session
+  await execInContainer(container, [
+    "tmux",
+    "send-keys",
+    "-t",
+    "main",
+    'claude --dangerously-skip-permissions --verbose "$(cat /tmp/task.txt)"',
+    "Enter",
+  ]);
+}
+
 export { docker };
