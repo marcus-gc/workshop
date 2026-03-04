@@ -14,7 +14,7 @@ export interface Craftsman {
   name: string;
   project_id: string;
   container_id: string | null;
-  status: 'pending' | 'starting' | 'running' | 'stopped' | 'error';
+  status: 'pending' | 'starting' | 'running' | 'stopping' | 'stopped' | 'error';
   error_message: string | null;
   session_id: string | null;
   port_mappings: string; // JSON object string e.g. {"3000": 32768}

@@ -189,6 +189,10 @@ body {
   background: var(--status-starting);
   animation: pulse 1.2s ease-in-out infinite;
 }
+.status-dot.stopping {
+  background: var(--status-error);
+  animation: pulse 1.2s ease-in-out infinite;
+}
 .status-dot.stopped  { background: var(--status-stopped); }
 .status-dot.error    { background: var(--status-error); }
 
@@ -210,6 +214,7 @@ body {
 .status-badge.running  { background: #052010; color: var(--status-running); }
 .status-badge.starting,
 .status-badge.pending  { background: #1f1200; color: var(--status-starting); }
+.status-badge.stopping { background: #1f0505; color: var(--status-error); }
 .status-badge.stopped  { background: #1a1a1a; color: var(--status-stopped); }
 .status-badge.error    { background: #1f0505; color: var(--status-error); }
 
@@ -763,6 +768,18 @@ body {
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
+}
+
+.spinner-inline {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(255,255,255,0.3);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 5px;
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
