@@ -13,10 +13,17 @@ export default function TerminalView({ craftsmanId, isRunning }: Props) {
   useEffect(() => {
     if (!isRunning || !containerRef.current) return
 
-    const { element, fitAddon } = useTerminalStore.getState().getOrCreate(craftsmanId)
+    const { element, fitAddon, terminal } = useTerminalStore.getState().getOrCreate(craftsmanId)
 
     // Reparent the persistent terminal element into our container
     containerRef.current.appendChild(element)
+
+    // Open the terminal now that element is in the DOM so xterm can measure
+    // font metrics. terminal.open() must only be called once per instance.
+    if (!terminal.element) {
+      terminal.open(element)
+    }
+
     requestAnimationFrame(() => fitAddon.fit())
 
     const observer = new ResizeObserver(() => fitAddon.fit())
