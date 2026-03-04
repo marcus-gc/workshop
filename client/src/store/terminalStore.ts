@@ -42,11 +42,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
 
-    // Persistent DOM element — opened once, reparented on attach/detach
+    // Persistent DOM element — terminal.open() is deferred until this element
+    // is actually in the DOM (done by TerminalView), so xterm can measure font
+    // metrics correctly and fitAddon.fit() produces the right cols/rows.
     const element = document.createElement('div')
     element.style.width = '100%'
     element.style.height = '100%'
-    terminal.open(element)
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const ws = new WebSocket(
@@ -55,8 +56,11 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     ws.binaryType = 'arraybuffer'
 
     ws.addEventListener('open', () => {
-      fitAddon.fit()
-      ws.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }))
+      // Only fit if terminal has already been opened (element attached to DOM)
+      if (terminal.element) {
+        fitAddon.fit()
+        ws.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }))
+      }
     })
 
     ws.addEventListener('message', (event) => {
