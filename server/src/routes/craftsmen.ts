@@ -11,6 +11,7 @@ import {
   removeContainer,
 } from "../services/docker.js";
 import { emitStatusChange } from "../services/events.js";
+import { removeAllProxies, restoreProxies } from "../services/port-proxy.js";
 
 const app = new Hono();
 
@@ -81,6 +82,7 @@ app.post("/:id/stop", async (c) => {
   if (!craftsman.container_id) return c.json({ error: "No container" }, 400);
 
   await stopContainer(craftsman.container_id);
+  removeAllProxies(craftsman.id);
   db.prepare(
     "UPDATE craftsmen SET status = 'stopped', updated_at = datetime('now') WHERE id = ?"
   ).run(craftsman.id);
@@ -100,12 +102,19 @@ app.post("/:id/start", async (c) => {
   ).run(craftsman.id);
   emitStatusChange(craftsman.id, "running");
 
+  // Restore dynamic port proxies after container restart
+  restoreProxies(craftsman.id, craftsman.container_id).catch((err) =>
+    console.error(`Failed to restore proxies for craftsman ${craftsman.id}:`, err)
+  );
+
   return c.json({ ...craftsman, status: "running" });
 });
 
 app.delete("/:id", async (c) => {
   const craftsman = findCraftsman(c.req.param("id"));
   if (!craftsman) return c.json({ error: "Craftsman not found" }, 404);
+
+  removeAllProxies(craftsman.id);
 
   if (craftsman.container_id) {
     await removeContainer(craftsman.container_id, craftsman.name);

@@ -91,6 +91,23 @@ export function openPR(craftsmanId: string, title: string, body: string): Promis
   });
 }
 
+// ── Ports ─────────────────────────────────────────────────────────────────────
+
+export function addPort(craftsmanId: string, port: number): Promise<{ container_port: number; host_port: number; port_mappings: Record<string, number> }> {
+  return request(`/api/craftsmen/${craftsmanId}/ports`, {
+    method: 'POST',
+    body: JSON.stringify({ port }),
+  });
+}
+
+export function removePort(craftsmanId: string, port: number): Promise<{ ok: boolean; port_mappings: Record<string, number> }> {
+  return request(`/api/craftsmen/${craftsmanId}/ports/${port}`, { method: 'DELETE' });
+}
+
+export function listPorts(craftsmanId: string): Promise<Array<{ container_port: number; host_port: number; dynamic: boolean }>> {
+  return request(`/api/craftsmen/${craftsmanId}/ports`);
+}
+
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 export function getStats(craftsmanId: string): Promise<StatsResult> {

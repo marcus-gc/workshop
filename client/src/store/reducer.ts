@@ -42,7 +42,8 @@ export type Action =
   | { type: 'APPEND_LOG'; craftsmanId: string; line: string }
   | { type: 'CLEAR_LOGS'; craftsmanId: string }
   | { type: 'SET_ACTIVE_TAB'; craftsmanId: string; tab: Tab }
-  | { type: 'SET_STATS'; craftsmanId: string; stats: StatsResult };
+  | { type: 'SET_STATS'; craftsmanId: string; stats: StatsResult }
+  | { type: 'UPDATE_CRAFTSMAN'; craftsman: Craftsman };
 
 function ensureUi(
   state: AppState,
@@ -141,6 +142,14 @@ export function reducer(state: AppState, action: Action): AppState {
         },
       };
     }
+
+    case 'UPDATE_CRAFTSMAN':
+      return {
+        ...state,
+        craftsmen: state.craftsmen.map((c) =>
+          c.id === action.craftsman.id ? action.craftsman : c
+        ),
+      };
 
     case 'SET_STATS': {
       const ui = ensureUi(state, action.craftsmanId);

@@ -25,6 +25,7 @@ RUN npm ci --production
 COPY server/tsconfig.json ./
 COPY server/src/ ./src/
 COPY server/Dockerfile.craftsman ./
+COPY server/mcp/ ./mcp/
 
 # Copy built React app into public/ (served by Hono's serveStatic)
 COPY --from=client-builder /build/server/public ./public/

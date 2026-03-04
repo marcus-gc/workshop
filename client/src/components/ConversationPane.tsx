@@ -179,7 +179,7 @@ export default function ConversationPane({ craftsmanId }: Props) {
       )}
 
       {activeTab === 'preview' && (
-        <ServerPreview craftsman={craftsman} />
+        <ServerPreview craftsman={craftsman} dispatch={dispatch} />
       )}
 
       {showGit && (

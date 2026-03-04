@@ -34,4 +34,10 @@ export function migrate() {
   } catch {
     // Column already exists
   }
+
+  try {
+    db.exec(`ALTER TABLE craftsmen ADD COLUMN dynamic_ports TEXT DEFAULT '[]'`);
+  } catch {
+    // Column already exists
+  }
 }

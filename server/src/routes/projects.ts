@@ -34,6 +34,43 @@ app.get("/:id", (c) => {
   return c.json(redactProject(project));
 });
 
+app.patch("/:id", async (c) => {
+  const id = c.req.param("id");
+  const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as Project | undefined;
+  if (!project) return c.json({ error: "Project not found" }, 404);
+
+  const body = await c.req.json();
+  const allowedFields = ["name", "repo_url", "branch", "github_token", "setup_cmd", "ports"] as const;
+  const updates: string[] = [];
+  const values: any[] = [];
+
+  for (const field of allowedFields) {
+    if (!(field in body)) continue;
+
+    if (field === "ports") {
+      const ports = body.ports;
+      if (!Array.isArray(ports) || !ports.every((p: any) => typeof p === "number" && Number.isInteger(p) && p > 0)) {
+        return c.json({ error: "ports must be an array of positive integers" }, 400);
+      }
+      updates.push(`${field} = ?`);
+      values.push(JSON.stringify(ports));
+    } else {
+      updates.push(`${field} = ?`);
+      values.push(body[field] ?? null);
+    }
+  }
+
+  if (updates.length === 0) {
+    return c.json({ error: "No valid fields to update" }, 400);
+  }
+
+  values.push(id);
+  db.prepare(`UPDATE projects SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+
+  const updated = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as Project;
+  return c.json(redactProject(updated));
+});
+
 app.delete("/:id", (c) => {
   const id = c.req.param("id");
   const craftsmen = db

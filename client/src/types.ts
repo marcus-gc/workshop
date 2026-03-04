@@ -18,6 +18,7 @@ export interface Craftsman {
   error_message: string | null;
   session_id: string | null;
   port_mappings: string; // JSON object string e.g. {"3000": 32768}
+  dynamic_ports: string; // JSON array string e.g. "[5173]"
   task: string | null;
   created_at: string;
   updated_at: string;

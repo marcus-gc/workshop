@@ -3,6 +3,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import db from "../db/client.js";
 import type { Craftsman, Project } from "../types.js";
+import { getProxiedPorts, removeAllProxies } from "./port-proxy.js";
 
 const docker = new Docker();
 
@@ -22,10 +23,14 @@ function getUsedPorts(): Set<number> {
       used.add(port);
     }
   }
+  // Include ports used by active TCP proxies
+  for (const port of getProxiedPorts()) {
+    used.add(port);
+  }
   return used;
 }
 
-function allocatePort(): number {
+export function allocatePort(): number {
   const used = getUsedPorts();
   for (let port = PORT_RANGE_START; port <= PORT_RANGE_END; port++) {
     if (!used.has(port)) return port;
@@ -53,7 +58,7 @@ export async function ensureCraftsmanImage(): Promise<void> {
 
   console.log("Building workshop-craftsman image...");
   const stream = await docker.buildImage(
-    { context: "/app", src: ["Dockerfile.craftsman"] },
+    { context: "/app", src: ["Dockerfile.craftsman", "mcp/workshop-tools.mjs"] },
     { t: CRAFTSMAN_IMAGE, dockerfile: "Dockerfile.craftsman", labels: { "dockerfile.hash": hash } }
   );
   await new Promise<void>((resolve, reject) => {
@@ -91,7 +96,11 @@ export async function createContainer(
   const container = await docker.createContainer({
     Image: CRAFTSMAN_IMAGE,
     name: `workshop-craftsman-${craftsman.name}`,
-    Env: [`ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY}`],
+    Env: [
+      `ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY}`,
+      `WORKSHOP_URL=http://workshop-server:7424`,
+      `CRAFTSMAN_ID=${craftsman.id}`,
+    ],
     ExposedPorts: exposedPorts,
     HostConfig: {
       PortBindings: portBindings,
@@ -99,6 +108,7 @@ export async function createContainer(
         `${craftsmanDir}:/workspace/project`,
         "/var/run/docker.sock:/var/run/docker.sock",
       ],
+      ExtraHosts: ["workshop-server:host-gateway"],
     },
   });
 
@@ -132,6 +142,18 @@ export async function initContainer(
     + `f.writeFileSync(p,JSON.stringify(c))" "$KEY_FP"`,
   ]);
 
+  // Configure MCP server in .claude.json so Claude Code discovers workshop-tools
+  await execInContainer(container, [
+    "sh",
+    "-c",
+    `node -e "const fs=require('fs'),p='/home/craftsman/.claude.json';` +
+    `const c=JSON.parse(fs.readFileSync(p,'utf8'));` +
+    `c.projects['/workspace/project'].mcpServers['workshop-tools']={` +
+    `command:'node',args:['/usr/local/lib/workshop-tools.mjs'],` +
+    `env:{WORKSHOP_URL:process.env.WORKSHOP_URL,CRAFTSMAN_ID:process.env.CRAFTSMAN_ID}};` +
+    `fs.writeFileSync(p,JSON.stringify(c))"`,
+  ]);
+
   // Skip the bypass-permissions mode dialog — this is a *settings* field, not claude.json.
   await execInContainer(container, [
     "sh",
@@ -163,6 +185,21 @@ export async function initContainer(
     "sh",
     "-c",
     `mkdir -p /workspace/project/.claude && echo '{"permissions":{"defaultMode":"bypassPermissions"},"skipDangerousModePermissionPrompt":true}' > /workspace/project/.claude/settings.json`,
+  ]);
+
+  // Write CLAUDE.md with container context so Claude Code knows about port forwarding
+  const claudeMd = [
+    "# Workshop Environment",
+    "You are running inside a Workshop craftsman container.",
+    "When you start a dev server or any process that listens on a port,",
+    "you MUST use the `forward_port` MCP tool to make it accessible.",
+    "After forwarding, the port will be reachable from the host machine.",
+  ].join("\n");
+  const claudeMdB64 = Buffer.from(claudeMd).toString("base64");
+  await execInContainer(container, [
+    "sh",
+    "-c",
+    `echo '${claudeMdB64}' | base64 -d > /workspace/project/.claude/CLAUDE.md`,
   ]);
 
   // Run setup command if specified
@@ -342,11 +379,13 @@ export async function reconcileContainers(): Promise<void> {
       const container = docker.getContainer(c.container_id);
       const info = await container.inspect();
       if (!info.State.Running) {
+        removeAllProxies(c.id);
         db.prepare(
           "UPDATE craftsmen SET status = 'stopped', updated_at = datetime('now') WHERE id = ?"
         ).run(c.id);
       }
     } catch {
+      removeAllProxies(c.id);
       db.prepare(
         "UPDATE craftsmen SET status = 'stopped', updated_at = datetime('now') WHERE id = ?"
       ).run(c.id);

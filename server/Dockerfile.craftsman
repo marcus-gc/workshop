@@ -31,6 +31,8 @@ RUN useradd -m -s /bin/bash craftsman \
 RUN echo 'craftsman ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/craftsman && \
     chmod 0440 /etc/sudoers.d/craftsman
 
+COPY mcp/workshop-tools.mjs /usr/local/lib/workshop-tools.mjs
+
 WORKDIR /workspace
 USER craftsman
 
