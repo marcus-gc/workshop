@@ -44,11 +44,13 @@ export default function ConversationPane({ craftsmanId }: Props) {
   async function handleStop() {
     setActionError(null)
     setIsActioning(true)
+    dispatch({ type: 'UPDATE_CRAFTSMAN_STATUS', id: craftsmanId, status: 'stopping' })
     try {
       await stopCraftsman(craftsmanId)
       useTerminalStore.getState().destroy(craftsmanId)
       dispatch({ type: 'UPDATE_CRAFTSMAN_STATUS', id: craftsmanId, status: 'stopped' })
     } catch (err: unknown) {
+      dispatch({ type: 'UPDATE_CRAFTSMAN_STATUS', id: craftsmanId, status: 'running' })
       setActionError(err instanceof Error ? err.message : String(err))
     } finally {
       setIsActioning(false)
@@ -86,6 +88,7 @@ export default function ConversationPane({ craftsmanId }: Props) {
 
   const stats = ui?.stats
   const isRunning = craftsman.status === 'running'
+  const isStopping = craftsman.status === 'stopping'
 
   return (
     <div className="conversation-pane">
@@ -111,13 +114,18 @@ export default function ConversationPane({ craftsmanId }: Props) {
           <button className="header-btn" onClick={() => setShowGit(true)}>
             Git
           </button>
-          {isRunning ? (
+          {isRunning || isStopping ? (
             <button
               className="header-btn danger"
               onClick={handleStop}
-              disabled={isActioning}
+              disabled={isStopping || isActioning}
             >
-              Stop
+              {isStopping ? (
+                <>
+                  <span className="spinner-inline" />
+                  Stopping…
+                </>
+              ) : 'Stop'}
             </button>
           ) : craftsman.status === 'stopped' ? (
             <button
