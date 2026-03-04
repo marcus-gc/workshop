@@ -28,4 +28,10 @@ export function migrate() {
 
     CREATE INDEX IF NOT EXISTS idx_craftsmen_status ON craftsmen(status);
   `);
+
+  try {
+    db.exec(`ALTER TABLE craftsmen ADD COLUMN task TEXT`);
+  } catch {
+    // Column already exists
+  }
 }

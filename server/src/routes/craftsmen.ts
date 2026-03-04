@@ -5,6 +5,7 @@ import type { Craftsman, Project } from "../types.js";
 import {
   createContainer,
   initContainer,
+  startClaudeWithTask,
   stopContainer,
   startContainer,
   removeContainer,
@@ -15,7 +16,7 @@ const app = new Hono();
 
 app.post("/", async (c) => {
   const body = await c.req.json();
-  const { name, project_id } = body;
+  const { name, project_id, task } = body;
 
   if (!name || !project_id) {
     return c.json({ error: "name and project_id are required" }, 400);
@@ -26,9 +27,9 @@ app.post("/", async (c) => {
 
   const id = uuid();
   db.prepare(
-    `INSERT INTO craftsmen (id, name, project_id, status)
-     VALUES (?, ?, ?, 'starting')`
-  ).run(id, name, project_id);
+    `INSERT INTO craftsmen (id, name, project_id, status, task)
+     VALUES (?, ?, ?, 'starting', ?)`
+  ).run(id, name, project_id, task ?? null);
 
   // Start container async
   const craftsman = db.prepare("SELECT * FROM craftsmen WHERE id = ?").get(id) as Craftsman;
@@ -41,6 +42,10 @@ app.post("/", async (c) => {
       ).run(containerId, JSON.stringify(portMappings), id);
 
       await initContainer(containerId, project);
+
+      if (task) {
+        await startClaudeWithTask(containerId, task);
+      }
 
       db.prepare(
         "UPDATE craftsmen SET status = 'running', updated_at = datetime('now') WHERE id = ?"

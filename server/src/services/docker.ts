@@ -111,6 +111,24 @@ export async function initContainer(
   // Create log file
   await execInContainer(container, ["touch", CONTAINER_LOG]);
 
+  // Pre-approve the API key in claude.json — fingerprint is last 20 chars of the key.
+  await execInContainer(container, [
+    "sh",
+    "-c",
+    `KEY_FP=$(echo -n "$ANTHROPIC_API_KEY" | tail -c 20) && `
+    + `node -e "const f=require('fs'),p='/home/craftsman/.claude.json';`
+    + `const c=JSON.parse(f.readFileSync(p,'utf8'));`
+    + `c.customApiKeyResponses={approved:[process.argv[1]],rejected:[]};`
+    + `f.writeFileSync(p,JSON.stringify(c))" "$KEY_FP"`,
+  ]);
+
+  // Skip the bypass-permissions mode dialog — this is a *settings* field, not claude.json.
+  await execInContainer(container, [
+    "sh",
+    "-c",
+    `mkdir -p /home/craftsman/.claude && echo '{"skipDangerousModePermissionPrompt":true}' > /home/craftsman/.claude/settings.json`,
+  ]);
+
   // Build clone URL, injecting token for private repos
   let cloneUrl = project.repo_url;
   if (project.github_token) {
@@ -128,6 +146,13 @@ export async function initContainer(
     project.branch,
     cloneUrl,
     "/workspace/project",
+  ]);
+
+  // Write project-level settings to enable bypassPermissions mode
+  await execInContainer(container, [
+    "sh",
+    "-c",
+    `mkdir -p /workspace/project/.claude && echo '{"permissions":{"defaultMode":"bypassPermissions"},"skipDangerousModePermissionPrompt":true}' > /workspace/project/.claude/settings.json`,
   ]);
 
   // Run setup command if specified
@@ -312,6 +337,31 @@ export async function reconcileContainers(): Promise<void> {
       ).run(c.id);
     }
   }
+}
+
+export async function startClaudeWithTask(
+  containerId: string,
+  task: string
+): Promise<void> {
+  const container = docker.getContainer(containerId);
+
+  // Write task to file via base64 to avoid all shell escaping issues
+  const b64 = Buffer.from(task).toString("base64");
+  await execInContainer(container, [
+    "sh",
+    "-c",
+    `echo '${b64}' | base64 -d > /tmp/task.txt`,
+  ]);
+
+  // Start Claude Code in the existing tmux session
+  await execInContainer(container, [
+    "tmux",
+    "send-keys",
+    "-t",
+    "main",
+    'claude --dangerously-skip-permissions --verbose "$(cat /tmp/task.txt)"',
+    "Enter",
+  ]);
 }
 
 export { docker };

@@ -6,11 +6,13 @@ import Sidebar from './components/Sidebar'
 import ConversationPane from './components/ConversationPane'
 import SettingsPane from './components/SettingsPane'
 import NewCraftsmanModal from './components/NewCraftsmanModal'
+import NewTaskModal from './components/NewTaskModal'
 
 export default function App() {
   const state = useAppState()
   const dispatch = useAppDispatch()
   const [showNewModal, setShowNewModal] = useState(false)
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false)
 
   // Initial data load + 30s polling
   const refetch = useCraftsmen(dispatch)
@@ -26,6 +28,7 @@ export default function App() {
         selectedId={state.selectedCraftsmanId}
         onSelect={(id) => dispatch({ type: 'SELECT_CRAFTSMAN', id })}
         onNew={() => setShowNewModal(true)}
+        onNewTask={() => setShowNewTaskModal(true)}
         onSettings={() => dispatch({ type: 'SET_VIEW', view: 'settings' })}
       />
 
@@ -53,6 +56,18 @@ export default function App() {
             dispatch({ type: 'ADD_CRAFTSMAN', craftsman })
             dispatch({ type: 'SELECT_CRAFTSMAN', id: craftsman.id })
             setShowNewModal(false)
+          }}
+        />
+      )}
+
+      {showNewTaskModal && (
+        <NewTaskModal
+          projects={state.projects}
+          onClose={() => setShowNewTaskModal(false)}
+          onCreated={(craftsman) => {
+            dispatch({ type: 'ADD_CRAFTSMAN', craftsman })
+            dispatch({ type: 'SELECT_CRAFTSMAN', id: craftsman.id })
+            setShowNewTaskModal(false)
           }}
         />
       )}

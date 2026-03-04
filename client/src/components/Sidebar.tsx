@@ -6,6 +6,7 @@ interface Props {
   selectedId: string | null
   onSelect: (id: string) => void
   onNew: () => void
+  onNewTask: () => void
   onSettings: () => void
 }
 
@@ -13,7 +14,7 @@ function getProjectName(projects: Project[], projectId: string): string {
   return projects.find((p) => p.id === projectId)?.name ?? '…'
 }
 
-export default function Sidebar({ craftsmen, projects, selectedId, onSelect, onNew, onSettings }: Props) {
+export default function Sidebar({ craftsmen, projects, selectedId, onSelect, onNew, onNewTask, onSettings }: Props) {
   return (
     <div className="sidebar">
       <div className="sidebar-header">
@@ -39,6 +40,12 @@ export default function Sidebar({ craftsmen, projects, selectedId, onSelect, onN
             <path d="M12 5v14M5 12h14"/>
           </svg>
           New Craftsman
+        </button>
+        <button className="btn-new" onClick={onNewTask}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          New Task
         </button>
       </div>
 
@@ -86,6 +93,11 @@ function CraftsmanItem({
       <div className="craftsman-info">
         <div className="craftsman-name">{craftsman.name}</div>
         <div className="craftsman-project">{projectName}</div>
+        {craftsman.task && (
+          <div className="craftsman-task" style={{ fontSize: 11, color: 'var(--text-dimmed)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {craftsman.task.length > 60 ? craftsman.task.slice(0, 60) + '…' : craftsman.task}
+          </div>
+        )}
       </div>
     </div>
   )
