@@ -20,7 +20,7 @@ RUN ARCH=$(uname -m) && \
 # Entrypoint: start this container's own Docker daemon, wait for it, then exec CMD
 RUN echo '#!/bin/bash' > /usr/local/bin/craftsman-entrypoint.sh \
  && echo 'set -e' >> /usr/local/bin/craftsman-entrypoint.sh \
- && echo 'sudo dockerd --log-level=error >/var/log/dockerd.log 2>&1 &' >> /usr/local/bin/craftsman-entrypoint.sh \
+ && echo 'sudo sh -c "dockerd --log-level=error >/var/log/dockerd.log 2>&1" &' >> /usr/local/bin/craftsman-entrypoint.sh \
  && echo 'until sudo docker info >/dev/null 2>&1; do sleep 0.2; done' >> /usr/local/bin/craftsman-entrypoint.sh \
  && echo 'sudo chmod 666 /var/run/docker.sock' >> /usr/local/bin/craftsman-entrypoint.sh \
  && echo 'exec "$@"' >> /usr/local/bin/craftsman-entrypoint.sh \
@@ -42,5 +42,6 @@ USER craftsman
 # Pre-configure Claude Code to skip interactive onboarding + project trust dialog.
 RUN echo '{"hasCompletedOnboarding":true,"projects":{"/workspace/project":{"hasTrustDialogAccepted":true,"allowedTools":[],"mcpContextUris":[],"mcpServers":{},"enabledMcpjsonServers":[],"disabledMcpjsonServers":[]}}}' > /home/craftsman/.claude.json
 
+VOLUME /var/lib/docker
 ENTRYPOINT ["craftsman-entrypoint.sh"]
 CMD ["tail", "-f", "/dev/null"]
