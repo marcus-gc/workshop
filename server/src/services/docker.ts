@@ -95,7 +95,10 @@ export async function createContainer(
     ExposedPorts: exposedPorts,
     HostConfig: {
       PortBindings: portBindings,
-      Binds: [`${craftsmanDir}:/workspace/project`],
+      Binds: [
+        `${craftsmanDir}:/workspace/project`,
+        "/var/run/docker.sock:/var/run/docker.sock",
+      ],
     },
   });
 
@@ -114,6 +117,9 @@ export async function initContainer(
 
   // Create log file
   await execInContainer(container, ["touch", CONTAINER_LOG]);
+
+  // Make the Docker socket accessible to the craftsman user
+  await execInContainer(container, ["sudo", "chmod", "666", "/var/run/docker.sock"]);
 
   // Pre-approve the API key in claude.json — fingerprint is last 20 chars of the key.
   await execInContainer(container, [

@@ -1,12 +1,35 @@
 FROM node:22-bookworm
 
-RUN apt-get update && apt-get install -y git curl tmux && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git curl tmux sudo && rm -rf /var/lib/apt/lists/*
+
+# Install Docker CLI (architecture-aware, matching Workshop's docker:27-dind)
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then ARCH="aarch64"; elif [ "$ARCH" = "x86_64" ]; then ARCH="x86_64"; fi && \
+    curl -fsSL "https://download.docker.com/linux/static/stable/${ARCH}/docker-27.5.1.tgz" | \
+    tar xz --strip-components=1 -C /usr/local/bin docker/docker
+
+# Install Docker Compose v2 as CLI plugin + symlink for hyphenated syntax
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then ARCH="aarch64"; elif [ "$ARCH" = "x86_64" ]; then ARCH="x86_64"; fi && \
+    mkdir -p /usr/local/lib/docker/cli-plugins && \
+    curl -fsSL "https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-linux-${ARCH}" \
+      -o /usr/local/lib/docker/cli-plugins/docker-compose && \
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose && \
+    ln -s /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+
+# Colima stub — Docker is provided via socket mount, but scripts may check for colima
+RUN printf '#!/bin/sh\ncase "$1" in status) echo "colima is running"; exit 0;; start) exit 0;; *) echo "colima stub: unsupported command $1"; exit 1;; esac\n' > /usr/local/bin/colima && \
+    chmod +x /usr/local/bin/colima
 
 RUN npm install -g @anthropic-ai/claude-code@latest
 
 RUN useradd -m -s /bin/bash craftsman \
  && mkdir -p /workspace \
  && chown craftsman:craftsman /workspace
+
+# Grant craftsman passwordless sudo
+RUN echo 'craftsman ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/craftsman && \
+    chmod 0440 /etc/sudoers.d/craftsman
 
 WORKDIR /workspace
 USER craftsman
