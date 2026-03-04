@@ -108,7 +108,7 @@ app.delete("/:id", async (c) => {
   if (!craftsman) return c.json({ error: "Craftsman not found" }, 404);
 
   if (craftsman.container_id) {
-    await removeContainer(craftsman.container_id);
+    await removeContainer(craftsman.container_id, craftsman.name);
   }
 
   db.prepare("DELETE FROM craftsmen WHERE id = ?").run(craftsman.id);

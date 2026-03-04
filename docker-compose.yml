@@ -14,6 +14,7 @@ services:
     volumes:
       - docker-data:/var/lib/docker
       - workshop-data:/data
+      - ./craftsmen:/craftsmen
     restart: unless-stopped
 
 volumes:

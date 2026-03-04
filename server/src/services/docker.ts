@@ -85,6 +85,9 @@ export async function createContainer(
     portMappings[String(port)] = hostPort;
   }
 
+  const craftsmanDir = `/craftsmen/${craftsman.name}`;
+  fs.mkdirSync(craftsmanDir, { recursive: true, mode: 0o777 });
+
   const container = await docker.createContainer({
     Image: CRAFTSMAN_IMAGE,
     name: `workshop-craftsman-${craftsman.name}`,
@@ -92,6 +95,7 @@ export async function createContainer(
     ExposedPorts: exposedPorts,
     HostConfig: {
       PortBindings: portBindings,
+      Binds: [`${craftsmanDir}:/workspace/project`],
     },
   });
 
@@ -218,7 +222,7 @@ export async function startContainer(containerId: string): Promise<void> {
   await container.start();
 }
 
-export async function removeContainer(containerId: string): Promise<void> {
+export async function removeContainer(containerId: string, craftsmanName?: string): Promise<void> {
   const container = docker.getContainer(containerId);
   try {
     await container.stop();
@@ -226,6 +230,11 @@ export async function removeContainer(containerId: string): Promise<void> {
     // might already be stopped
   }
   await container.remove();
+
+  if (craftsmanName) {
+    const craftsmanDir = `/craftsmen/${craftsmanName}`;
+    fs.rmSync(craftsmanDir, { recursive: true, force: true });
+  }
 }
 
 export async function getGitDiff(containerId: string): Promise<{ diff: string; stat: string }> {
