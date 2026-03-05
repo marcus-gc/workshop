@@ -23,6 +23,10 @@ RUN echo '#!/bin/bash' > /usr/local/bin/craftsman-entrypoint.sh \
  && echo 'sudo sh -c "dockerd --log-level=error >/var/log/dockerd.log 2>&1" &' >> /usr/local/bin/craftsman-entrypoint.sh \
  && echo 'until sudo docker info >/dev/null 2>&1; do sleep 0.2; done' >> /usr/local/bin/craftsman-entrypoint.sh \
  && echo 'sudo chmod 666 /var/run/docker.sock' >> /usr/local/bin/craftsman-entrypoint.sh \
+ && echo '# Skip DNAT for traffic arriving on eth0 so docker-proxy handles it.' >> /usr/local/bin/craftsman-entrypoint.sh \
+ && echo '# In DinD, iptables conntrack does not reliably reverse-DNAT responses,' >> /usr/local/bin/craftsman-entrypoint.sh \
+ && echo '# causing external traffic to inner containers to time out.' >> /usr/local/bin/craftsman-entrypoint.sh \
+ && echo 'sudo iptables -t nat -I DOCKER -i eth0 -j RETURN 2>/dev/null || true' >> /usr/local/bin/craftsman-entrypoint.sh \
  && echo 'exec "$@"' >> /usr/local/bin/craftsman-entrypoint.sh \
  && chmod +x /usr/local/bin/craftsman-entrypoint.sh
 
