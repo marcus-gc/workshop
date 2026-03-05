@@ -9,6 +9,7 @@ import {
   stopContainer,
   startContainer,
   removeContainer,
+  rebuildContainer,
 } from "../services/docker.js";
 import { emitStatusChange } from "../services/events.js";
 
@@ -101,6 +102,38 @@ app.post("/:id/start", async (c) => {
   emitStatusChange(craftsman.id, "running");
 
   return c.json({ ...craftsman, status: "running" });
+});
+
+app.post("/:id/rebuild", async (c) => {
+  const craftsman = findCraftsman(c.req.param("id"));
+  if (!craftsman) return c.json({ error: "Craftsman not found" }, 404);
+
+  const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(craftsman.project_id) as Project | undefined;
+  if (!project) return c.json({ error: "Project not found" }, 404);
+
+  db.prepare(
+    "UPDATE craftsmen SET status = 'starting', updated_at = datetime('now') WHERE id = ?"
+  ).run(craftsman.id);
+  emitStatusChange(craftsman.id, "starting");
+
+  (async () => {
+    try {
+      const { containerId, portMappings } = await rebuildContainer(craftsman, project);
+      db.prepare(
+        `UPDATE craftsmen SET container_id = ?, port_mappings = ?, status = 'running', updated_at = datetime('now') WHERE id = ?`
+      ).run(containerId, JSON.stringify(portMappings), craftsman.id);
+      emitStatusChange(craftsman.id, "running");
+      console.log(`Craftsman ${craftsman.name} rebuilt successfully.`);
+    } catch (err: any) {
+      console.error(`Failed to rebuild craftsman ${craftsman.name}:`, err);
+      db.prepare(
+        "UPDATE craftsmen SET status = 'error', error_message = ?, updated_at = datetime('now') WHERE id = ?"
+      ).run(err.message, craftsman.id);
+      emitStatusChange(craftsman.id, "error", { error_message: err.message });
+    }
+  })();
+
+  return c.json({ ...craftsman, status: "starting" });
 });
 
 app.delete("/:id", async (c) => {

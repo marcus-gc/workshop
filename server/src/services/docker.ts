@@ -3,6 +3,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import db from "../db/client.js";
 import type { Craftsman, Project } from "../types.js";
+import { getBridgeUrls } from "./mcp-bridge.js";
 
 const docker = new Docker();
 
@@ -153,22 +154,31 @@ async function waitForContainerDocker(container: Docker.Container): Promise<void
 
 export async function initContainer(
   containerId: string,
-  project: Project
+  project: Project,
+  opts: { skipClone?: boolean } = {}
 ): Promise<void> {
   const container = docker.getContainer(containerId);
 
   // Create log file
   await execInContainer(container, ["touch", CONTAINER_LOG]);
 
-  // Pre-approve the API key in claude.json — fingerprint is last 20 chars of the key.
+  // Pre-approve the API key and inject MCP server URLs into claude.json.
+  const mcpUrls = getBridgeUrls();
+  const mcpJson = Buffer.from(JSON.stringify(mcpUrls)).toString("base64");
+
   await execInContainer(container, [
     "sh",
     "-c",
     `KEY_FP=$(echo -n "$ANTHROPIC_API_KEY" | tail -c 20) && `
-    + `node -e "const f=require('fs'),p='/home/craftsman/.claude.json';`
+    + `MCP_SERVERS=$(echo '${mcpJson}' | base64 -d) && `
+    + `node -e "`
+    + `const f=require('fs'),p='/home/craftsman/.claude.json';`
     + `const c=JSON.parse(f.readFileSync(p,'utf8'));`
     + `c.customApiKeyResponses={approved:[process.argv[1]],rejected:[]};`
-    + `f.writeFileSync(p,JSON.stringify(c))" "$KEY_FP"`,
+    + `const mcp=JSON.parse(process.argv[2]);`
+    + `if(c.projects){for(const k of Object.keys(c.projects)){Object.assign(c.projects[k].mcpServers||{},mcp);c.projects[k].mcpServers=Object.assign({},c.projects[k].mcpServers,mcp)}}`
+    + `f.writeFileSync(p,JSON.stringify(c))`
+    + `" "$KEY_FP" "$MCP_SERVERS"`,
   ]);
 
   // Skip the bypass-permissions mode dialog — this is a *settings* field, not claude.json.
@@ -178,24 +188,26 @@ export async function initContainer(
     `mkdir -p /home/craftsman/.claude && echo '{"skipDangerousModePermissionPrompt":true}' > /home/craftsman/.claude/settings.json`,
   ]);
 
-  // Build clone URL, injecting token for private repos
-  let cloneUrl = project.repo_url;
-  if (project.github_token) {
-    const url = new URL(cloneUrl);
-    url.username = "x-access-token";
-    url.password = project.github_token;
-    cloneUrl = url.toString();
-  }
+  if (!opts.skipClone) {
+    // Build clone URL, injecting token for private repos
+    let cloneUrl = project.repo_url;
+    if (project.github_token) {
+      const url = new URL(cloneUrl);
+      url.username = "x-access-token";
+      url.password = project.github_token;
+      cloneUrl = url.toString();
+    }
 
-  // Clone the repo
-  await loggedExec(container, [
-    "git",
-    "clone",
-    "--branch",
-    project.branch,
-    cloneUrl,
-    "/workspace/project",
-  ]);
+    // Clone the repo
+    await loggedExec(container, [
+      "git",
+      "clone",
+      "--branch",
+      project.branch,
+      cloneUrl,
+      "/workspace/project",
+    ]);
+  }
 
   // Write project-level settings to enable bypassPermissions mode
   await execInContainer(container, [
@@ -216,6 +228,29 @@ export async function initContainer(
 
   // Start a detached tmux session for interactive terminal access
   await execInContainer(container, ["tmux", "new-session", "-d", "-s", "main", "-c", "/workspace/project"]);
+}
+
+/**
+ * Rebuild a craftsman container without deleting workspace files.
+ * Stops and removes the old container, creates a new one with the same
+ * bind mount, and re-runs init (skipping git clone).
+ */
+export async function rebuildContainer(
+  craftsman: Craftsman,
+  project: Project
+): Promise<{ containerId: string; portMappings: Record<string, number> }> {
+  if (craftsman.container_id) {
+    const oldContainer = docker.getContainer(craftsman.container_id);
+    try { await oldContainer.stop(); } catch (e: any) {
+      if (e.statusCode !== 304) throw e;
+    }
+    await oldContainer.remove();
+  }
+
+  const { containerId, portMappings } = await createContainer(craftsman, project);
+  await initContainer(containerId, project, { skipClone: true });
+
+  return { containerId, portMappings };
 }
 
 /** Run a command and tee its output to the container log file. */

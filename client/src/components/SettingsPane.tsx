@@ -6,8 +6,10 @@ import {
   updateProject,
   validateGitHubToken,
   listGitHubRepos,
+  getMcpServers,
+  restartMcpBridges,
 } from '../api'
-import type { Project, GitHubRepo } from '../types'
+import type { Project, GitHubRepo, McpServer } from '../types'
 
 const TOKEN_KEY = 'workshop_github_token'
 
@@ -30,9 +32,14 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
   const [portsInput, setPortsInput] = useState('')
   const [portsSaving, setPortsSaving] = useState(false)
   const [portsError, setPortsError] = useState<string | null>(null)
+  const [mcpServers, setMcpServers] = useState<McpServer[]>([])
+  const [mcpLoading, setMcpLoading] = useState(false)
+  const [mcpRestarting, setMcpRestarting] = useState(false)
+  const [mcpError, setMcpError] = useState<string | null>(null)
 
   useEffect(() => {
     refreshProjects()
+    refreshMcpServers()
     // Validate saved token on mount
     if (token) {
       validateGitHubToken(token)
@@ -40,6 +47,32 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
         .catch(() => setTokenUser(null))
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function refreshMcpServers() {
+    setMcpLoading(true)
+    setMcpError(null)
+    try {
+      const res = await getMcpServers()
+      setMcpServers(res.servers)
+    } catch (err: unknown) {
+      setMcpError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setMcpLoading(false)
+    }
+  }
+
+  async function handleRestartMcp() {
+    setMcpRestarting(true)
+    setMcpError(null)
+    try {
+      const res = await restartMcpBridges()
+      setMcpServers(res.servers)
+    } catch (err: unknown) {
+      setMcpError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setMcpRestarting(false)
+    }
+  }
 
   async function refreshProjects() {
     try {
@@ -177,6 +210,78 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
             <span className="token-status invalid">{tokenError}</span>
           )}
         </div>
+      </div>
+
+      <div className="divider" />
+
+      {/* MCP Servers */}
+      <div className="settings-section">
+        <h3>MCP Servers</h3>
+        <p className="settings-section-desc">
+          MCP servers from your host machine are bridged into craftsman containers via SSE.
+          Re-authenticate on your host, then resync to pick up new tokens.
+        </p>
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          <button
+            className="btn btn-primary"
+            onClick={handleRestartMcp}
+            disabled={mcpRestarting}
+          >
+            {mcpRestarting ? (
+              <>
+                <span className="spinner-inline" />
+                Resyncing…
+              </>
+            ) : 'Resync MCP Auth'}
+          </button>
+          <button
+            className="btn btn-ghost"
+            onClick={refreshMcpServers}
+            disabled={mcpLoading}
+          >
+            Refresh
+          </button>
+        </div>
+
+        {mcpError && <div className="error-banner" style={{ margin: '0 0 12px' }}>{mcpError}</div>}
+
+        {mcpLoading && mcpServers.length === 0 ? (
+          <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading…</div>
+        ) : mcpServers.length === 0 ? (
+          <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+            No MCP servers found. Configure MCP servers in your host's <code>~/.claude.json</code> and rebuild Workshop.
+          </div>
+        ) : (
+          <div className="mcp-server-list">
+            {mcpServers.map((s) => (
+              <div key={s.name} className="mcp-server-item">
+                <div className="mcp-server-info">
+                  <div className="mcp-server-name">
+                    {s.name}
+                    <span className={`mcp-status-dot ${s.status === 'running' ? 'running' : s.status === 'passthrough' ? 'passthrough' : 'error'}`} />
+                  </div>
+                  <div className="mcp-server-detail">
+                    {s.type === 'bridge' ? (
+                      <span className="tag" style={{ marginRight: 6 }}>bridge</span>
+                    ) : (
+                      <span className="tag" style={{ marginRight: 6 }}>passthrough</span>
+                    )}
+                    <span style={{ color: 'var(--text-dimmed)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                      {s.command || s.url}
+                    </span>
+                  </div>
+                  {s.error && (
+                    <div style={{ color: 'var(--status-error)', fontSize: 11, marginTop: 2 }}>{s.error}</div>
+                  )}
+                </div>
+                <span className={`tag ${s.status === 'running' || s.status === 'passthrough' ? 'synced' : ''}`}>
+                  {s.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="divider" />

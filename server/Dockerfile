@@ -29,8 +29,8 @@ COPY server/Dockerfile.craftsman ./
 # Copy built React app into public/ (served by Hono's serveStatic)
 COPY --from=client-builder /build/server/public ./public/
 
-# Install tsx for running TypeScript
-RUN npm install -g tsx
+# Install tsx for running TypeScript and supergateway for MCP bridging
+RUN npm install -g tsx supergateway
 
 EXPOSE 7424
 

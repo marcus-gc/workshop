@@ -9,6 +9,7 @@ import type {
   CreateProjectPayload,
   CreateCraftsmanPayload,
   GitHubRepo,
+  McpServersResponse,
 } from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -99,6 +100,16 @@ export function openPR(craftsmanId: string, title: string, body: string): Promis
 
 export function getStats(craftsmanId: string): Promise<StatsResult> {
   return request(`/api/craftsmen/${craftsmanId}/stats`);
+}
+
+// ── MCP ──────────────────────────────────────────────────────────────────────
+
+export function getMcpServers(): Promise<McpServersResponse> {
+  return request('/api/mcp/servers');
+}
+
+export function restartMcpBridges(): Promise<{ ok: boolean; servers: McpServersResponse['servers'] }> {
+  return request('/api/mcp/restart', { method: 'POST' });
 }
 
 // ── GitHub API (external) ─────────────────────────────────────────────────────

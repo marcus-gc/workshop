@@ -6,6 +6,7 @@ services:
     privileged: true
     ports:
       - "7424:7424"
+      - "48100-48119:48100-48119"  # Range for MCP bridge SSE endpoints
       - "49200-49300:49200-49300"  # Range for proxied container ports
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -15,6 +16,8 @@ services:
       - docker-data:/var/lib/docker
       - workshop-data:/data
       - ./craftsmen:/craftsmen
+      - ~/.claude.json:/host-claude-config/claude.json:ro
+      - ~/.mcp-auth:/home/node/.mcp-auth:ro
     restart: unless-stopped
 
 volumes:
