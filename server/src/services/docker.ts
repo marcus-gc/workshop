@@ -338,7 +338,21 @@ export async function stopContainer(containerId: string): Promise<void> {
 
 export async function startContainer(containerId: string): Promise<void> {
   const container = docker.getContainer(containerId);
-  await container.start();
+  try {
+    await container.start();
+  } catch (e: any) {
+    if (e.statusCode === 304) return; // already running — nothing to do
+    throw e;
+  }
+
+  // Wait for the inner dockerd to be ready (entrypoint starts it fresh)
+  await waitForContainerDocker(container);
+
+  // Restart tmux session (previous one died when the container was stopped)
+  try {
+    await execInContainer(container, ["tmux", "kill-server"]);
+  } catch {}
+  await execInContainer(container, ["tmux", "new-session", "-d", "-s", "main", "-c", "/workspace/project"]);
 }
 
 export async function removeContainer(containerId: string, craftsmanName?: string): Promise<void> {
