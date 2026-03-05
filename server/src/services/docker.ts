@@ -95,9 +95,9 @@ export async function createContainer(
     ExposedPorts: exposedPorts,
     HostConfig: {
       PortBindings: portBindings,
+      Privileged: true,
       Binds: [
         `${craftsmanDir}:/workspace/project`,
-        "/var/run/docker.sock:/var/run/docker.sock",
       ],
     },
   });
@@ -109,6 +109,17 @@ export async function createContainer(
 
 const CONTAINER_LOG = "/tmp/workshop.log";
 
+/** Poll until the craftsman container's own dockerd is accepting connections. */
+async function waitForContainerDocker(container: Docker.Container): Promise<void> {
+  for (let i = 0; i < 60; i++) {
+    try {
+      const out = await execInContainer(container, ["sh", "-c", "docker info >/dev/null 2>&1 && echo ok"]);
+      if (out.trim() === "ok") return;
+    } catch {}
+    await new Promise((r) => setTimeout(r, 500));
+  }
+}
+
 export async function initContainer(
   containerId: string,
   project: Project
@@ -117,9 +128,6 @@ export async function initContainer(
 
   // Create log file
   await execInContainer(container, ["touch", CONTAINER_LOG]);
-
-  // Make the Docker socket accessible to the craftsman user
-  await execInContainer(container, ["sudo", "chmod", "666", "/var/run/docker.sock"]);
 
   // Pre-approve the API key in claude.json — fingerprint is last 20 chars of the key.
   await execInContainer(container, [
@@ -165,8 +173,9 @@ export async function initContainer(
     `mkdir -p /workspace/project/.claude && echo '{"permissions":{"defaultMode":"bypassPermissions"},"skipDangerousModePermissionPrompt":true}' > /workspace/project/.claude/settings.json`,
   ]);
 
-  // Run setup command if specified
+  // Run setup command if specified — wait for the container's own dockerd first
   if (project.setup_cmd) {
+    await waitForContainerDocker(container);
     await loggedExec(
       container,
       ["sh", "-c", project.setup_cmd],
