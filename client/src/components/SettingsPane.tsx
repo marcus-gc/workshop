@@ -3,6 +3,7 @@ import {
   listProjects,
   createProject,
   deleteProject,
+  updateProject,
   validateGitHubToken,
   listGitHubRepos,
 } from '../api'
@@ -25,6 +26,10 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [importingId, setImportingId] = useState<number | null>(null)
+  const [editingPortsId, setEditingPortsId] = useState<string | null>(null)
+  const [portsInput, setPortsInput] = useState('')
+  const [portsSaving, setPortsSaving] = useState(false)
+  const [portsError, setPortsError] = useState<string | null>(null)
 
   useEffect(() => {
     refreshProjects()
@@ -96,6 +101,39 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
       onProjectsChanged()
     } catch (err: unknown) {
       setSyncError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  function startEditingPorts(project: Project) {
+    const ports: number[] = JSON.parse(project.ports)
+    setEditingPortsId(project.id)
+    setPortsInput(ports.join(', '))
+    setPortsError(null)
+  }
+
+  async function handleSavePorts(projectId: string) {
+    setPortsError(null)
+    const parsed = portsInput
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+      .map(Number)
+
+    if (parsed.some(isNaN)) {
+      setPortsError('Invalid port numbers')
+      return
+    }
+
+    setPortsSaving(true)
+    try {
+      await updateProject(projectId, { ports: parsed })
+      await refreshProjects()
+      onProjectsChanged()
+      setEditingPortsId(null)
+    } catch (err: unknown) {
+      setPortsError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPortsSaving(false)
     }
   }
 
@@ -180,12 +218,38 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
                     </td>
                     <td style={{ color: 'var(--text-secondary)' }}>{p.branch}</td>
                     <td>
-                      {noPorts ? (
-                        <span className="tag no-ports">No ports</span>
+                      {editingPortsId === p.id ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <input
+                            className="form-input"
+                            style={{ width: 120, fontSize: 12, padding: '2px 6px' }}
+                            value={portsInput}
+                            onChange={(e) => setPortsInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSavePorts(p.id)
+                              if (e.key === 'Escape') setEditingPortsId(null)
+                            }}
+                            onBlur={() => handleSavePorts(p.id)}
+                            autoFocus
+                            disabled={portsSaving}
+                            placeholder="3000, 8080"
+                          />
+                          {portsError && <span style={{ color: 'var(--status-error)', fontSize: 11 }}>{portsError}</span>}
+                        </span>
                       ) : (
-                        ports.map((port) => (
-                          <span key={port} className="tag" style={{ marginRight: 3 }}>:{port}</span>
-                        ))
+                        <span
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => startEditingPorts(p)}
+                          title="Click to edit ports"
+                        >
+                          {noPorts ? (
+                            <span className="tag no-ports">No ports</span>
+                          ) : (
+                            ports.map((port) => (
+                              <span key={port} className="tag" style={{ marginRight: 3 }}>:{port}</span>
+                            ))
+                          )}
+                        </span>
                       )}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
