@@ -30,6 +30,18 @@ RUN echo '#!/bin/bash' > /usr/local/bin/craftsman-entrypoint.sh \
  && echo 'exec "$@"' >> /usr/local/bin/craftsman-entrypoint.sh \
  && chmod +x /usr/local/bin/craftsman-entrypoint.sh
 
+# Colima stub — projects that use Colima for Docker on macOS will find Docker
+# already running via DinD inside craftsman containers. This stub satisfies
+# `colima status`, `colima start`, `colima version`, etc.
+RUN printf '#!/bin/sh\n\
+case "$1" in\n\
+  status) echo "INFO[0000] colima is running using QEMU"; echo "RUNTIME: docker"; exit 0 ;;\n\
+  start)  echo "INFO[0000] colima is already running"; exit 0 ;;\n\
+  stop)   echo "INFO[0000] stopping colima"; exit 0 ;;\n\
+  version) echo "colima version 0.8.1 (stub)"; exit 0 ;;\n\
+  *)      exit 0 ;;\n\
+esac\n' > /usr/local/bin/colima && chmod +x /usr/local/bin/colima
+
 RUN npm install -g @anthropic-ai/claude-code@latest
 
 RUN useradd -m -s /bin/bash craftsman \
