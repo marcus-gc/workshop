@@ -25,12 +25,25 @@ function getUsedPorts(): Set<number> {
   return used;
 }
 
+// Extra ports to skip — populated at runtime when Docker reports a port conflict
+const runtimeExcludedPorts = new Set<number>();
+
 function allocatePort(): number {
   const used = getUsedPorts();
   for (let port = PORT_RANGE_START; port <= PORT_RANGE_END; port++) {
-    if (!used.has(port)) return port;
+    if (!used.has(port) && !runtimeExcludedPorts.has(port)) return port;
   }
   throw new Error(`No available ports in range ${PORT_RANGE_START}-${PORT_RANGE_END}`);
+}
+
+function isPortConflictError(err: any): boolean {
+  return err?.statusCode === 500 && typeof err?.message === "string" &&
+    err.message.includes("port is already allocated");
+}
+
+function extractConflictPort(err: any): number | null {
+  const match = err?.message?.match(/Bind for 0\.0\.0\.0:(\d+) failed/);
+  return match ? Number(match[1]) : null;
 }
 
 export async function ensureCraftsmanImage(): Promise<void> {
@@ -72,39 +85,57 @@ export async function createContainer(
   craftsman: Craftsman,
   project: Project
 ): Promise<{ containerId: string; portMappings: Record<string, number> }> {
-  const ports = JSON.parse(project.ports) as number[];
-  const exposedPorts: Record<string, object> = {};
-  const portBindings: Record<string, Array<{ HostPort: string; HostIp: string }>> = {};
-
-  const portMappings: Record<string, number> = {};
-  for (const port of ports) {
-    const key = `${port}/tcp`;
-    const hostPort = allocatePort();
-    exposedPorts[key] = {};
-    portBindings[key] = [{ HostIp: "0.0.0.0", HostPort: String(hostPort) }];
-    portMappings[String(port)] = hostPort;
-  }
-
   const craftsmanDir = `/craftsmen/${craftsman.name}`;
   fs.mkdirSync(craftsmanDir, { recursive: true, mode: 0o777 });
 
-  const container = await docker.createContainer({
-    Image: CRAFTSMAN_IMAGE,
-    name: `workshop-craftsman-${craftsman.name}`,
-    Env: [`ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY}`],
-    ExposedPorts: exposedPorts,
-    HostConfig: {
-      PortBindings: portBindings,
-      Privileged: true,
-      Binds: [
-        `${craftsmanDir}:/workspace/project`,
-      ],
-    },
-  });
+  const MAX_RETRIES = 5;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const ports = JSON.parse(project.ports) as number[];
+    const exposedPorts: Record<string, object> = {};
+    const portBindings: Record<string, Array<{ HostPort: string; HostIp: string }>> = {};
+    const portMappings: Record<string, number> = {};
 
-  await container.start();
+    for (const port of ports) {
+      const key = `${port}/tcp`;
+      const hostPort = allocatePort();
+      exposedPorts[key] = {};
+      portBindings[key] = [{ HostIp: "0.0.0.0", HostPort: String(hostPort) }];
+      portMappings[String(port)] = hostPort;
+    }
 
-  return { containerId: container.id, portMappings };
+    const container = await docker.createContainer({
+      Image: CRAFTSMAN_IMAGE,
+      name: `workshop-craftsman-${craftsman.name}`,
+      Env: [`ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY}`],
+      ExposedPorts: exposedPorts,
+      HostConfig: {
+        PortBindings: portBindings,
+        Privileged: true,
+        Binds: [`${craftsmanDir}:/workspace/project`],
+      },
+    });
+
+    try {
+      await container.start();
+      return { containerId: container.id, portMappings };
+    } catch (err: any) {
+      // Clean up the created-but-not-started container
+      try { await container.remove(); } catch {}
+
+      if (isPortConflictError(err)) {
+        const conflictPort = extractConflictPort(err);
+        if (conflictPort) {
+          console.warn(`Port ${conflictPort} conflict on attempt ${attempt + 1}, retrying...`);
+          runtimeExcludedPorts.add(conflictPort);
+          // Clear exclusion after 30s — the old container should be fully gone by then
+          setTimeout(() => runtimeExcludedPorts.delete(conflictPort), 30_000);
+          continue;
+        }
+      }
+      throw err;
+    }
+  }
+  throw new Error("Failed to allocate ports after multiple retries");
 }
 
 const CONTAINER_LOG = "/tmp/workshop.log";
@@ -221,6 +252,79 @@ export async function execInContainer(
     });
     stream.on("error", reject);
   });
+}
+
+export async function recreateContainerWithPorts(
+  craftsman: Craftsman,
+  project: Project
+): Promise<{ containerId: string; portMappings: Record<string, number> }> {
+  const oldContainer = docker.getContainer(craftsman.container_id!);
+
+  // Stop old container (ignore "already stopped")
+  try {
+    await oldContainer.stop();
+  } catch (e: any) {
+    if (e.statusCode !== 304) throw e;
+  }
+
+  // Remove old container — bind mount at /craftsmen/{name} is preserved
+  await oldContainer.remove();
+
+  const craftsmanDir = `/craftsmen/${craftsman.name}`;
+  const MAX_RETRIES = 5;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const ports = JSON.parse(project.ports) as number[];
+    const exposedPorts: Record<string, object> = {};
+    const portBindings: Record<string, Array<{ HostPort: string; HostIp: string }>> = {};
+    const portMappings: Record<string, number> = {};
+
+    for (const port of ports) {
+      const key = `${port}/tcp`;
+      const hostPort = allocatePort();
+      exposedPorts[key] = {};
+      portBindings[key] = [{ HostIp: "0.0.0.0", HostPort: String(hostPort) }];
+      portMappings[String(port)] = hostPort;
+    }
+
+    const container = await docker.createContainer({
+      Image: CRAFTSMAN_IMAGE,
+      name: `workshop-craftsman-${craftsman.name}`,
+      Env: [`ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY}`],
+      ExposedPorts: exposedPorts,
+      HostConfig: {
+        PortBindings: portBindings,
+        Privileged: true,
+        Binds: [`${craftsmanDir}:/workspace/project`],
+      },
+    });
+
+    try {
+      await container.start();
+
+      // Wait for inner dockerd
+      await waitForContainerDocker(container);
+
+      // Restart tmux session
+      await execInContainer(container, ["tmux", "new-session", "-d", "-s", "main", "-c", "/workspace/project"]);
+
+      return { containerId: container.id, portMappings };
+    } catch (err: any) {
+      try { await container.remove(); } catch {}
+
+      if (isPortConflictError(err)) {
+        const conflictPort = extractConflictPort(err);
+        if (conflictPort) {
+          console.warn(`Port ${conflictPort} conflict on attempt ${attempt + 1}, retrying...`);
+          runtimeExcludedPorts.add(conflictPort);
+          setTimeout(() => runtimeExcludedPorts.delete(conflictPort), 30_000);
+          continue;
+        }
+      }
+      throw err;
+    }
+  }
+  throw new Error("Failed to allocate ports after multiple retries");
 }
 
 export async function stopContainer(containerId: string): Promise<void> {
