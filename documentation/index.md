@@ -20,8 +20,7 @@ flowchart TD
   D --> C1[Craftsman: alice]
   D --> C2[Craftsman: bob]
   D --> C3[Craftsman: carol]
-  W -->|Reverse Proxy| C1
-  W -->|WebSocket Terminal| C2
+  W -->|WebSocket Terminal| C1
   W -->|MCP Bridges| C3
 
   click W href "#" "server/src/index.ts"
@@ -66,4 +65,4 @@ docker compose up --build
 - [Creating a Craftsman](workflows/creating_a_craftsman) — Hire a Craftsman via the UI or API
 - [Assigning a Task](workflows/assigning_a_task) — Create a Craftsman with an automated task
 - [Relieving a Craftsman](workflows/relieving_a_craftsman) — Stop, rebuild, and remove a Craftsman
-- [Port Forwarding](workflows/update_craftsman_port_forwarding) — Manage exposed ports and the reverse proxy
+- [Port Forwarding](workflows/update_craftsman_port_forwarding) — Manage exposed ports and direct host access

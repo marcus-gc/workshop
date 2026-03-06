@@ -116,21 +116,19 @@ Craftsman containers can expose ports (e.g. 3000 for a dev server). Workshop all
 
 ```mermaid
 flowchart LR
-  B[Browser] -->|:7424| WS[Workshop Server]
-  B -->|:49200| P1["alice:3000"]
+  B[Browser] -->|:49200| P1["alice:3000"]
   B -->|:49201| P2["bob:3000"]
-  WS -->|/proxy/alice/3000/*| P1
 
-  click WS href "#" "server/src/index.ts:19-23"
   click P1 href "#" "server/src/services/docker.ts:85-140"
 ```
 
-There are two ways to reach a Craftsman's exposed port:
+Each port is accessed directly via the allocated host port:
 
-| Method | URL | Use case |
-|--------|-----|----------|
-| **Direct** | `http://localhost:{hostPort}` | Browser, curl, external tools |
-| **Reverse proxy** | `http://localhost:7424/proxy/{name}/{port}/` | Embedded iframes in the UI |
+```
+http://localhost:{hostPort}
+```
+
+The **Preview** tab in the UI uses these direct host port URLs to embed iframes of running services.
 
 ### Port Allocation
 

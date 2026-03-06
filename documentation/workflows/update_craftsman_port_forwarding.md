@@ -1,7 +1,7 @@
 ---
 title: Port Forwarding
 description: How Craftsman port forwarding works and how to access exposed services.
-tags: [ports, networking, proxy, workflow]
+tags: [ports, networking, workflow]
 ---
 
 ## How Port Forwarding Works
@@ -31,9 +31,7 @@ The mapping is determined at container creation time and stored in the Craftsman
 
 ## Accessing Exposed Services
 
-There are two ways to reach a service running inside a Craftsman container:
-
-### 1. Direct host port
+Each mapped port is accessed directly via the allocated host port:
 
 ```
 http://localhost:{hostPort}
@@ -45,32 +43,13 @@ For example, if `port_mappings` shows `{"3000": 49200}`:
 http://localhost:49200
 ```
 
-This works from your browser, curl, or any tool on the host machine.
-
-### 2. Reverse proxy
-
-```
-http://localhost:7424/proxy/{craftsmanName}/{containerPort}/
-```
-
-For example:
-
-```
-http://localhost:7424/proxy/alice/3000/
-```
-
-The Workshop server proxies the request to the correct host port. This is what the **Preview** tab in the UI uses for embedded iframes.
+This works from your browser, curl, or any tool on the host machine. The **Preview** tab in the UI uses these direct host port URLs to embed iframes of running services.
 
 ```mermaid
-flowchart TD
-  B[Browser] -->|/proxy/alice/3000/path| WS[Workshop Server]
-  WS -->|Lookup port_mappings| DB[(SQLite)]
-  WS -->|Forward to :49200/path| C[Craftsman Container]
-  C -->|Response| WS
-  WS -->|Response| B
+flowchart LR
+  B[Browser] -->|:49200| C["alice:3000"]
+  B -->|:49201| C2["bob:3000"]
 
-  click WS href "#" "server/src/index.ts:19-23"
-  click DB href "#" "server/src/db/schema.ts:16-27"
   click C href "#" "server/src/services/docker.ts:85-140"
 ```
 
@@ -162,4 +141,4 @@ The maximum number of mapped ports across all active Craftsmen is **101** (49200
 
 **Port conflict**: If you get a "no available ports" error, you've exhausted the 49200–49300 range. Delete unused Craftsmen to free up ports.
 
-**Preview not loading**: The reverse proxy requires the Craftsman to be in `running` status. Check the Craftsman status and ensure the dev server is actually running inside the container.
+**Preview not loading**: The Craftsman must be in `running` status. Check the Craftsman status and ensure the dev server is actually running inside the container.

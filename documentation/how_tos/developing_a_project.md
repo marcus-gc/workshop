@@ -101,9 +101,7 @@ The **Logs** tab streams container stdout/stderr in real time via SSE. Useful fo
 
 ### Server Preview
 
-If your project exposes ports, the **Preview** tab shows a live iframe of the running service. For a Next.js app on port 3000, the preview loads via the Workshop reverse proxy.
-
-You can also access it directly at `http://localhost:{hostPort}` — check the Craftsman's `port_mappings` for the allocated host port.
+If your project exposes ports, the **Preview** tab shows a live iframe of the running service. It connects directly to the allocated host port (e.g. `http://localhost:49200` for container port 3000). Check the Craftsman's `port_mappings` for the exact mapping.
 
 ### Resource Stats
 

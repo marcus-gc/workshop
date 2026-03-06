@@ -113,10 +113,7 @@ sequenceDiagram
 
 The `ports` array specifies which container ports should be accessible from the host. When a Craftsman starts, each port is mapped to a unique host port in the range 49200–49300.
 
-For example, if a project has `ports: [3000]` and the Craftsman gets allocated host port 49200:
-
-- **Direct access**: `http://localhost:49200`
-- **Reverse proxy**: `http://localhost:7424/proxy/{craftsmanName}/3000/`
+For example, if a project has `ports: [3000]` and the Craftsman gets allocated host port 49200, the service is accessible at `http://localhost:49200`.
 
 See [Architecture](architecture) for details on port forwarding.
 
