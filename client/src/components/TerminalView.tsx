@@ -24,7 +24,11 @@ export default function TerminalView({ craftsmanId, isRunning }: Props) {
       terminal.open(element)
     }
 
-    requestAnimationFrame(() => fitAddon.fit())
+    // Fit first to get exact cols/rows, then connect the WebSocket with those dimensions
+    requestAnimationFrame(() => {
+      fitAddon.fit()
+      useTerminalStore.getState().connect(craftsmanId, terminal.cols, terminal.rows)
+    })
 
     const observer = new ResizeObserver(() => fitAddon.fit())
     observer.observe(containerRef.current)
