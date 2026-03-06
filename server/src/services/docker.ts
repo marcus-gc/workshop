@@ -3,7 +3,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import db from "../db/client.js";
 import type { Craftsman, Project } from "../types.js";
-import { getBridgeUrls } from "./mcp-bridge.js";
+import { getBridgeUrls, startCraftsmanBridges, stopCraftsmanBridges } from "./mcp-bridge.js";
 
 const docker = new Docker();
 
@@ -155,15 +155,20 @@ async function waitForContainerDocker(container: Docker.Container): Promise<void
 export async function initContainer(
   containerId: string,
   project: Project,
-  opts: { skipClone?: boolean } = {}
+  opts: { skipClone?: boolean; craftsmanId?: string } = {}
 ): Promise<void> {
   const container = docker.getContainer(containerId);
 
   // Create log file
   await execInContainer(container, ["touch", CONTAINER_LOG]);
 
+  // Start dedicated MCP bridges for this craftsman
+  if (opts.craftsmanId) {
+    await startCraftsmanBridges(opts.craftsmanId);
+  }
+
   // Pre-approve the API key and inject MCP server URLs into claude.json.
-  const mcpUrls = getBridgeUrls();
+  const mcpUrls = opts.craftsmanId ? getBridgeUrls(opts.craftsmanId) : {};
   const mcpJson = Buffer.from(JSON.stringify(mcpUrls)).toString("base64");
 
   await execInContainer(container, [
@@ -248,7 +253,7 @@ export async function rebuildContainer(
   }
 
   const { containerId, portMappings } = await createContainer(craftsman, project);
-  await initContainer(containerId, project, { skipClone: true });
+  await initContainer(containerId, project, { skipClone: true, craftsmanId: craftsman.id });
 
   return { containerId, portMappings };
 }

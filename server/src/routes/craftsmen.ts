@@ -12,6 +12,7 @@ import {
   rebuildContainer,
 } from "../services/docker.js";
 import { emitStatusChange } from "../services/events.js";
+import { stopCraftsmanBridges } from "../services/mcp-bridge.js";
 
 const app = new Hono();
 
@@ -42,7 +43,7 @@ app.post("/", async (c) => {
         `UPDATE craftsmen SET container_id = ?, port_mappings = ?, updated_at = datetime('now') WHERE id = ?`
       ).run(containerId, JSON.stringify(portMappings), id);
 
-      await initContainer(containerId, project);
+      await initContainer(containerId, project, { craftsmanId: id });
 
       if (task) {
         await startClaudeWithTask(containerId, task);
@@ -82,6 +83,7 @@ app.post("/:id/stop", async (c) => {
   if (!craftsman.container_id) return c.json({ error: "No container" }, 400);
 
   await stopContainer(craftsman.container_id);
+  await stopCraftsmanBridges(craftsman.id);
   db.prepare(
     "UPDATE craftsmen SET status = 'stopped', updated_at = datetime('now') WHERE id = ?"
   ).run(craftsman.id);
@@ -143,6 +145,7 @@ app.delete("/:id", async (c) => {
   if (craftsman.container_id) {
     await removeContainer(craftsman.container_id, craftsman.name);
   }
+  await stopCraftsmanBridges(craftsman.id);
 
   db.prepare("DELETE FROM craftsmen WHERE id = ?").run(craftsman.id);
 

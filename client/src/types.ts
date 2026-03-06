@@ -73,8 +73,16 @@ export interface CreateCraftsmanPayload {
   task?: string;
 }
 
-export interface McpServer {
+export interface McpHostServer {
   name: string;
+  type: 'stdio' | 'sse';
+  command?: string;
+  url?: string;
+}
+
+export interface McpActiveBridge {
+  name: string;
+  craftsmanId?: string;
   type: 'bridge' | 'passthrough';
   status: string;
   port?: number;
@@ -84,8 +92,8 @@ export interface McpServer {
 }
 
 export interface McpServersResponse {
-  servers: McpServer[];
-  urls: Record<string, { type: string; url: string }>;
+  hostServers: McpHostServer[];
+  activeBridges: McpActiveBridge[];
 }
 
 export interface GitHubRepo {

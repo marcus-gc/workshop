@@ -72,6 +72,10 @@ export function deleteCraftsman(id: string): Promise<void> {
   return request(`/api/craftsmen/${id}`, { method: 'DELETE' });
 }
 
+export function rebuildCraftsman(id: string): Promise<Craftsman> {
+  return request(`/api/craftsmen/${id}/rebuild`, { method: 'POST' });
+}
+
 // ── Git ───────────────────────────────────────────────────────────────────────
 
 export function getDiff(craftsmanId: string): Promise<DiffResult> {
@@ -108,7 +112,7 @@ export function getMcpServers(): Promise<McpServersResponse> {
   return request('/api/mcp/servers');
 }
 
-export function restartMcpBridges(): Promise<{ ok: boolean; servers: McpServersResponse['servers'] }> {
+export function restartMcpBridges(): Promise<{ ok: boolean; activeBridges: McpServersResponse['activeBridges'] }> {
   return request('/api/mcp/restart', { method: 'POST' });
 }
 

@@ -9,7 +9,7 @@ import {
   getMcpServers,
   restartMcpBridges,
 } from '../api'
-import type { Project, GitHubRepo, McpServer } from '../types'
+import type { Project, GitHubRepo, McpHostServer, McpActiveBridge } from '../types'
 
 const TOKEN_KEY = 'workshop_github_token'
 
@@ -32,7 +32,8 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
   const [portsInput, setPortsInput] = useState('')
   const [portsSaving, setPortsSaving] = useState(false)
   const [portsError, setPortsError] = useState<string | null>(null)
-  const [mcpServers, setMcpServers] = useState<McpServer[]>([])
+  const [mcpHostServers, setMcpHostServers] = useState<McpHostServer[]>([])
+  const [mcpActiveBridges, setMcpActiveBridges] = useState<McpActiveBridge[]>([])
   const [mcpLoading, setMcpLoading] = useState(false)
   const [mcpRestarting, setMcpRestarting] = useState(false)
   const [mcpError, setMcpError] = useState<string | null>(null)
@@ -53,7 +54,8 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
     setMcpError(null)
     try {
       const res = await getMcpServers()
-      setMcpServers(res.servers)
+      setMcpHostServers(res.hostServers)
+      setMcpActiveBridges(res.activeBridges)
     } catch (err: unknown) {
       setMcpError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -66,7 +68,7 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
     setMcpError(null)
     try {
       const res = await restartMcpBridges()
-      setMcpServers(res.servers)
+      setMcpActiveBridges(res.activeBridges)
     } catch (err: unknown) {
       setMcpError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -246,41 +248,64 @@ export default function SettingsPane({ onBack, onProjectsChanged }: Props) {
 
         {mcpError && <div className="error-banner" style={{ margin: '0 0 12px' }}>{mcpError}</div>}
 
-        {mcpLoading && mcpServers.length === 0 ? (
+        {mcpLoading && mcpHostServers.length === 0 ? (
           <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading…</div>
-        ) : mcpServers.length === 0 ? (
+        ) : mcpHostServers.length === 0 ? (
           <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
             No MCP servers found. Configure MCP servers in your host's <code>~/.claude.json</code> and rebuild Workshop.
           </div>
         ) : (
-          <div className="mcp-server-list">
-            {mcpServers.map((s) => (
-              <div key={s.name} className="mcp-server-item">
-                <div className="mcp-server-info">
-                  <div className="mcp-server-name">
-                    {s.name}
-                    <span className={`mcp-status-dot ${s.status === 'running' ? 'running' : s.status === 'passthrough' ? 'passthrough' : 'error'}`} />
+          <>
+            <div className="mcp-server-list" style={{ marginBottom: 16 }}>
+              {mcpHostServers.map((s) => (
+                <div key={s.name} className="mcp-server-item">
+                  <div className="mcp-server-info">
+                    <div className="mcp-server-name">{s.name}</div>
+                    <div className="mcp-server-detail">
+                      <span className="tag" style={{ marginRight: 6 }}>{s.type}</span>
+                      <span style={{ color: 'var(--text-dimmed)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                        {s.command || s.url}
+                      </span>
+                    </div>
                   </div>
-                  <div className="mcp-server-detail">
-                    {s.type === 'bridge' ? (
-                      <span className="tag" style={{ marginRight: 6 }}>bridge</span>
-                    ) : (
-                      <span className="tag" style={{ marginRight: 6 }}>passthrough</span>
-                    )}
-                    <span style={{ color: 'var(--text-dimmed)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                      {s.command || s.url}
-                    </span>
-                  </div>
-                  {s.error && (
-                    <div style={{ color: 'var(--status-error)', fontSize: 11, marginTop: 2 }}>{s.error}</div>
-                  )}
                 </div>
-                <span className={`tag ${s.status === 'running' || s.status === 'passthrough' ? 'synced' : ''}`}>
-                  {s.status}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+
+            {mcpActiveBridges.length > 0 && (
+              <>
+                <h4 style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                  Active Bridges ({mcpActiveBridges.length})
+                </h4>
+                <div className="mcp-server-list">
+                  {mcpActiveBridges.map((b) => (
+                    <div key={`${b.name}-${b.craftsmanId ?? ''}-${b.port ?? ''}`} className="mcp-server-item">
+                      <div className="mcp-server-info">
+                        <div className="mcp-server-name">
+                          {b.name}
+                          <span className={`mcp-status-dot ${b.status === 'running' || b.status === 'passthrough' ? 'running' : 'error'}`} />
+                        </div>
+                        <div className="mcp-server-detail">
+                          {b.craftsmanId && (
+                            <span className="tag" style={{ marginRight: 6 }}>{b.craftsmanId.slice(0, 8)}</span>
+                          )}
+                          <span style={{ color: 'var(--text-dimmed)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                            :{b.port}
+                          </span>
+                        </div>
+                        {b.error && (
+                          <div style={{ color: 'var(--status-error)', fontSize: 11, marginTop: 2 }}>{b.error}</div>
+                        )}
+                      </div>
+                      <span className={`tag ${b.status === 'running' || b.status === 'passthrough' ? 'synced' : ''}`}>
+                        {b.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
         )}
       </div>
 
