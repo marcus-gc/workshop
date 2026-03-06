@@ -16,6 +16,7 @@ flowchart TD
       EP --> WS[Workshop Server - Hono]
       WS --> DB[(SQLite)]
       WS --> UI[React UI - static]
+      WS --> MB[MCP Bridges]
       DD --> C1["Craftsman: alice"]
       DD --> C2["Craftsman: bob"]
     end
@@ -26,10 +27,11 @@ flowchart TD
 
   click EP href "#" "server/entrypoint.sh"
   click WS href "#" "server/src/index.ts"
-  click DB href "#" "server/src/db/schema.ts:4-27"
+  click DB href "#" "server/src/db/schema.ts:3-37"
   click DD href "#" "docker-compose.yml:6-6"
+  click MB href "#" "server/src/services/mcp-bridge.ts:186-195"
   click C1 href "#" "server/Dockerfile.craftsman"
-  click WC href "#" "server/Dockerfile:12-40"
+  click WC href "#" "server/Dockerfile:12-41"
 ```
 
 ## Docker-in-Docker (DinD)
@@ -50,7 +52,7 @@ sequenceDiagram
   E->>S: exec tsx src/index.ts
 
   click E href "#" "server/entrypoint.sh"
-  click S href "#" "server/src/index.ts:10-31"
+  click S href "#" "server/src/index.ts:11-28"
 ```
 
 Two Docker volumes persist state across restarts:
@@ -59,6 +61,28 @@ Two Docker volumes persist state across restarts:
 |--------|-------|---------|
 | `docker-data` | `/var/lib/docker` | Inner Docker daemon state (images, containers) |
 | `workshop-data` | `/data` | SQLite database |
+
+## Server Initialization
+
+When the Workshop server starts, it runs through this sequence:
+
+```mermaid
+flowchart TD
+  A[Migrate DB] --> B[Build/verify Craftsman image]
+  B --> C[Start MCP bridges]
+  C --> D[Reconcile container states]
+  D --> E[Setup WebSocket handler]
+  E --> F[Listen on port 7424]
+
+  click A href "#" "server/src/db/schema.ts:3-37"
+  click B href "#" "server/src/services/docker.ts:50-83"
+  click C href "#" "server/src/services/mcp-bridge.ts:186-195"
+  click D href "#" "server/src/services/docker.ts:501-522"
+  click E href "#" "server/src/services/websocket.ts:58-86"
+  click F href "#" "server/src/index.ts:25-27"
+```
+
+**Reconciliation** ensures that if a Craftsman container died while the server was down, its database status is updated to `stopped`.
 
 ## Craftsman Containers
 
@@ -69,7 +93,8 @@ flowchart TD
   subgraph Image["workshop-craftsman image"]
     N[Node.js 22] --> G[git]
     G --> TM[tmux]
-    TM --> CC[Claude Code CLI]
+    TM --> DK[Docker daemon]
+    DK --> CC[Claude Code CLI]
     CC --> U[User: craftsman]
   end
 
@@ -79,30 +104,11 @@ flowchart TD
 The image is built once on server startup and cached using a SHA256 hash of the Dockerfile. If the Dockerfile changes, the image is rebuilt automatically.
 
 Key characteristics:
-- **Non-root**: Runs as the `craftsman` user
+- **Non-root**: Runs as the `craftsman` user with passwordless sudo
 - **Pre-configured**: Claude Code onboarding is skipped via `~/.claude.json`
-- **Long-lived**: `CMD ["tail", "-f", "/dev/null"]` keeps the container alive
+- **Docker-in-Docker**: Each container runs its own `dockerd` for Claude Code tool use
+- **Long-lived**: A craftsman entrypoint script starts dockerd, then `tail -f /dev/null` keeps the container alive
 - **API key injected**: `ANTHROPIC_API_KEY` is passed as an environment variable at container creation
-
-## Server Initialization
-
-When the Workshop server starts, it runs through this sequence:
-
-```mermaid
-flowchart TD
-  A[migrate DB] --> B[Build/verify Craftsman image]
-  B --> C[Reconcile container states]
-  C --> D[Setup WebSocket handler]
-  D --> E[Listen on port 7424]
-
-  click A href "#" "server/src/db/schema.ts:3-31"
-  click B href "#" "server/src/services/docker.ts:36-69"
-  click C href "#" "server/src/services/docker.ts:294-315"
-  click D href "#" "server/src/services/websocket.ts:58-83"
-  click E href "#" "server/src/index.ts:23-25"
-```
-
-**Reconciliation** ensures that if a Craftsman container died while the server was down, its database status is updated to `stopped`.
 
 ## Networking & Port Forwarding
 
@@ -110,25 +116,23 @@ Craftsman containers can expose ports (e.g. 3000 for a dev server). Workshop all
 
 ```mermaid
 flowchart LR
-  B[Browser] -->|:7424| WS[Workshop Server]
-  B -->|:49200| P1["alice:3000"]
+  B[Browser] -->|:49200| P1["alice:3000"]
   B -->|:49201| P2["bob:3000"]
-  WS -->|/proxy/alice/3000/*| P1
 
-  click WS href "#" "server/src/index.ts:17-19"
-  click P1 href "#" "server/src/services/docker.ts:71-101"
+  click P1 href "#" "server/src/services/docker.ts:85-140"
 ```
 
-There are two ways to reach a Craftsman's exposed port:
+Each port is accessed directly via the allocated host port:
 
-| Method | URL | Use case |
-|--------|-----|----------|
-| **Direct** | `http://localhost:{hostPort}` | Browser, curl, external tools |
-| **Reverse proxy** | `http://localhost:7424/proxy/{name}/{port}/` | Embedded iframes in the UI |
+```
+http://localhost:{hostPort}
+```
+
+The **Preview** tab in the UI uses these direct host port URLs to embed iframes of running services.
 
 ### Port Allocation
 
-When a Craftsman is created, the server allocates one host port per container port by scanning the 49200–49300 range for unused ports. The mapping is stored in the database as JSON.
+When a Craftsman is created, the server allocates one host port per container port by scanning the 49200–49300 range for unused ports. The mapping is stored in the database as JSON. Ports that recently caused conflicts are temporarily excluded.
 
 ```mermaid
 flowchart TD
@@ -137,10 +141,14 @@ flowchart TD
   C --> D[Docker PortBindings configured]
   D --> E[Stored in craftsmen table]
 
-  click B href "#" "server/src/services/docker.ts:28-34"
-  click D href "#" "server/src/services/docker.ts:76-96"
+  click B href "#" "server/src/services/docker.ts:85-140"
+  click D href "#" "server/src/services/docker.ts:100-115"
   click E href "#" "server/src/db/schema.ts:16-27"
 ```
+
+### MCP Bridge Ports
+
+MCP bridges use a separate port range: **48100–48399**. These ports allow Craftsman containers to reach host MCP servers via SSE. See [MCP Bridges](mcp_bridges) for details.
 
 ## Terminal Access
 
@@ -194,10 +202,10 @@ flowchart LR
   B --> C[POST /git/push]
   C --> D[POST /git/pr]
 
-  click A href "#" "server/src/services/docker.ts:206-213"
-  click B href "#" "server/src/services/docker.ts:215-232"
-  click C href "#" "server/src/services/docker.ts:234-244"
-  click D href "#" "server/src/routes/git.ts"
+  click A href "#" "server/src/services/docker.ts:413-420"
+  click B href "#" "server/src/services/docker.ts:422-439"
+  click C href "#" "server/src/services/docker.ts:441-451"
+  click D href "#" "server/src/routes/git.ts:71-127"
 ```
 
 Pushes go to a `craftsman/{name}` branch. PRs are opened via the GitHub API using the project's stored token.

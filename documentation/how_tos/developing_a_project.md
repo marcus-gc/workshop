@@ -21,10 +21,10 @@ flowchart LR
   D --> E[Open PR]
   E --> C
 
-  click A href "#" "server/src/routes/projects.ts"
-  click B href "#" "server/src/routes/craftsmen.ts:16-60"
-  click D href "#" "server/src/services/docker.ts:215-244"
-  click E href "#" "server/src/routes/git.ts"
+  click A href "#" "server/src/routes/projects.ts:10-26"
+  click B href "#" "server/src/routes/craftsmen.ts:19-67"
+  click D href "#" "server/src/services/docker.ts:422-451"
+  click E href "#" "server/src/routes/git.ts:71-127"
 ```
 
 ## Step 1: Create a Project
@@ -37,6 +37,8 @@ In the Workshop UI, go to **Settings** and create a new Project. Provide:
 - **Setup command** — runs after cloning (e.g. `npm install`)
 - **Ports** — container ports to expose (e.g. `3000` for a dev server)
 - **GitHub token** _(optional)_ — needed for private repos and PR creation
+
+You can also import repos directly from GitHub by entering your token in Settings and clicking **Fetch Repositories**.
 
 Or via the API:
 
@@ -56,11 +58,15 @@ curl -X POST http://localhost:7424/api/projects \
 Click **New Craftsman** in the sidebar, pick a name and project. The Craftsman will move through `starting` → `running` as it:
 
 1. Creates a Docker container
-2. Clones the repo to `/workspace/project`
-3. Runs the setup command
-4. Starts a tmux session
+2. Waits for inner Docker daemon readiness
+3. Configures MCP servers
+4. Clones the repo to `/workspace/project`
+5. Runs the setup command
+6. Starts a tmux session
 
 Wait for the status indicator to turn green (running).
+
+Alternatively, use **New Task** to create a Craftsman with an automated task — Claude Code will start working immediately. See [Assigning a Task](../workflows/assigning_a_task).
 
 ## Step 3: Interact with the Craftsman
 
@@ -85,7 +91,7 @@ sequenceDiagram
     T-->>B: Output
   end
 
-  click W href "#" "server/src/services/websocket.ts:58-83"
+  click W href "#" "server/src/services/websocket.ts:58-86"
   click T href "#" "server/src/services/terminal.ts:4-24"
 ```
 
@@ -95,13 +101,11 @@ The **Logs** tab streams container stdout/stderr in real time via SSE. Useful fo
 
 ### Server Preview
 
-If your project exposes ports, the **Preview** tab shows a live iframe of the running service. For a Next.js app on port 3000, the preview loads via the Workshop reverse proxy.
-
-You can also access it directly at `http://localhost:{hostPort}` — check the Craftsman's `port_mappings` for the allocated host port.
+If your project exposes ports, the **Preview** tab shows a live iframe of the running service. It connects directly to the allocated host port (e.g. `http://localhost:49200` for container port 3000). Check the Craftsman's `port_mappings` for the exact mapping.
 
 ### Resource Stats
 
-The UI shows CPU usage, memory, and process count for the running container. This data comes from the Docker stats API.
+The UI shows CPU usage, memory, and process count for the running container. This data comes from the Docker stats API, polled every 5 seconds.
 
 ## Step 4: Commit and Push
 
@@ -122,9 +126,10 @@ flowchart TD
   F --> G[Link to PR on GitHub]
   B -->|No| H[Continue working]
 
-  click A href "#" "server/src/services/docker.ts:206-213"
-  click D href "#" "server/src/services/docker.ts:215-232"
-  click E href "#" "server/src/services/docker.ts:234-244"
+  click A href "#" "server/src/services/docker.ts:413-420"
+  click D href "#" "server/src/services/docker.ts:422-439"
+  click E href "#" "server/src/services/docker.ts:441-451"
+  click F href "#" "server/src/routes/git.ts:71-127"
 ```
 
 Or via the API:
@@ -154,5 +159,6 @@ You can have multiple Craftsmen working on the same Project simultaneously. Each
 ## Next Steps
 
 - [Creating a Craftsman](../workflows/creating_a_craftsman) — detailed step-by-step
+- [Assigning a Task](../workflows/assigning_a_task) — automated task-based workflow
 - [Relieving a Craftsman](../workflows/relieving_a_craftsman) — stopping and cleaning up
 - [Port Forwarding](../workflows/update_craftsman_port_forwarding) — managing exposed ports
