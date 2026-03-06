@@ -9,6 +9,7 @@ import type {
   CreateProjectPayload,
   CreateCraftsmanPayload,
   GitHubRepo,
+  McpServersResponse,
 } from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -71,6 +72,10 @@ export function deleteCraftsman(id: string): Promise<void> {
   return request(`/api/craftsmen/${id}`, { method: 'DELETE' });
 }
 
+export function rebuildCraftsman(id: string): Promise<Craftsman> {
+  return request(`/api/craftsmen/${id}/rebuild`, { method: 'POST' });
+}
+
 // ── Git ───────────────────────────────────────────────────────────────────────
 
 export function getDiff(craftsmanId: string): Promise<DiffResult> {
@@ -99,6 +104,16 @@ export function openPR(craftsmanId: string, title: string, body: string): Promis
 
 export function getStats(craftsmanId: string): Promise<StatsResult> {
   return request(`/api/craftsmen/${craftsmanId}/stats`);
+}
+
+// ── MCP ──────────────────────────────────────────────────────────────────────
+
+export function getMcpServers(): Promise<McpServersResponse> {
+  return request('/api/mcp/servers');
+}
+
+export function restartMcpBridges(): Promise<{ ok: boolean; activeBridges: McpServersResponse['activeBridges'] }> {
+  return request('/api/mcp/restart', { method: 'POST' });
 }
 
 // ── GitHub API (external) ─────────────────────────────────────────────────────

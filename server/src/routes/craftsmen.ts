@@ -9,8 +9,10 @@ import {
   stopContainer,
   startContainer,
   removeContainer,
+  rebuildContainer,
 } from "../services/docker.js";
 import { emitStatusChange } from "../services/events.js";
+import { stopCraftsmanBridges } from "../services/mcp-bridge.js";
 
 const app = new Hono();
 
@@ -41,7 +43,7 @@ app.post("/", async (c) => {
         `UPDATE craftsmen SET container_id = ?, port_mappings = ?, updated_at = datetime('now') WHERE id = ?`
       ).run(containerId, JSON.stringify(portMappings), id);
 
-      await initContainer(containerId, project);
+      await initContainer(containerId, project, { craftsmanId: id });
 
       if (task) {
         await startClaudeWithTask(containerId, task);
@@ -81,6 +83,7 @@ app.post("/:id/stop", async (c) => {
   if (!craftsman.container_id) return c.json({ error: "No container" }, 400);
 
   await stopContainer(craftsman.container_id);
+  await stopCraftsmanBridges(craftsman.id);
   db.prepare(
     "UPDATE craftsmen SET status = 'stopped', updated_at = datetime('now') WHERE id = ?"
   ).run(craftsman.id);
@@ -103,6 +106,38 @@ app.post("/:id/start", async (c) => {
   return c.json({ ...craftsman, status: "running" });
 });
 
+app.post("/:id/rebuild", async (c) => {
+  const craftsman = findCraftsman(c.req.param("id"));
+  if (!craftsman) return c.json({ error: "Craftsman not found" }, 404);
+
+  const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(craftsman.project_id) as Project | undefined;
+  if (!project) return c.json({ error: "Project not found" }, 404);
+
+  db.prepare(
+    "UPDATE craftsmen SET status = 'starting', updated_at = datetime('now') WHERE id = ?"
+  ).run(craftsman.id);
+  emitStatusChange(craftsman.id, "starting");
+
+  (async () => {
+    try {
+      const { containerId, portMappings } = await rebuildContainer(craftsman, project);
+      db.prepare(
+        `UPDATE craftsmen SET container_id = ?, port_mappings = ?, status = 'running', updated_at = datetime('now') WHERE id = ?`
+      ).run(containerId, JSON.stringify(portMappings), craftsman.id);
+      emitStatusChange(craftsman.id, "running");
+      console.log(`Craftsman ${craftsman.name} rebuilt successfully.`);
+    } catch (err: any) {
+      console.error(`Failed to rebuild craftsman ${craftsman.name}:`, err);
+      db.prepare(
+        "UPDATE craftsmen SET status = 'error', error_message = ?, updated_at = datetime('now') WHERE id = ?"
+      ).run(err.message, craftsman.id);
+      emitStatusChange(craftsman.id, "error", { error_message: err.message });
+    }
+  })();
+
+  return c.json({ ...craftsman, status: "starting" });
+});
+
 app.delete("/:id", async (c) => {
   const craftsman = findCraftsman(c.req.param("id"));
   if (!craftsman) return c.json({ error: "Craftsman not found" }, 404);
@@ -110,6 +145,7 @@ app.delete("/:id", async (c) => {
   if (craftsman.container_id) {
     await removeContainer(craftsman.container_id, craftsman.name);
   }
+  await stopCraftsmanBridges(craftsman.id);
 
   db.prepare("DELETE FROM craftsmen WHERE id = ?").run(craftsman.id);
 

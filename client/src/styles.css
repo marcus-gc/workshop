@@ -895,6 +895,50 @@ body {
 .tag.synced { color: var(--status-running); background: #052010; border-color: #0a3018; }
 .tag.no-ports { color: var(--status-starting); background: #1f1200; border-color: #3a2000; }
 
+/* ── MCP server list ───────────────────────────────────────────────────────── */
+.mcp-server-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.mcp-server-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.mcp-server-item:last-child { border-bottom: none; }
+
+.mcp-server-info { flex: 1; min-width: 0; }
+
+.mcp-server-name {
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mcp-server-detail {
+  display: flex;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.mcp-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mcp-status-dot.running     { background: var(--status-running); }
+.mcp-status-dot.passthrough { background: var(--status-running); }
+.mcp-status-dot.error       { background: var(--status-error); }
+
 /* ── Divider ───────────────────────────────────────────────────────────────── */
 .divider {
   height: 1px;

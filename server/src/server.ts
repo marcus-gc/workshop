@@ -9,6 +9,7 @@ import logs from "./routes/logs.js";
 import events from "./routes/events.js";
 import git from "./routes/git.js";
 import stats from "./routes/stats.js";
+import mcp from "./routes/mcp.js";
 
 const app = new Hono();
 
@@ -22,6 +23,7 @@ app.route("/api/craftsmen", logs);
 app.route("/api/craftsmen", events);
 app.route("/api/craftsmen", git);
 app.route("/api/craftsmen", stats);
+app.route("/api/mcp", mcp);
 
 // Serve built React app from ./public (relative to CWD = /app in Docker)
 app.use("/*", serveStatic({ root: "./public" }));

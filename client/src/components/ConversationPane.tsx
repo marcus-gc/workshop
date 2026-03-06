@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAppState, useAppDispatch } from '../store/AppContext'
 import { useContainerLogs } from '../hooks/useContainerLogs'
-import { stopCraftsman, startCraftsman, deleteCraftsman, getStats } from '../api'
+import { stopCraftsman, startCraftsman, deleteCraftsman, rebuildCraftsman, getStats } from '../api'
 import type { Tab } from '../store/reducer'
 import LogsViewer from './LogsViewer'
 import ServerPreview from './ServerPreview'
@@ -38,6 +38,13 @@ export default function ConversationPane({ craftsmanId }: Props) {
     return () => clearInterval(id)
   }, [craftsmanId, craftsman?.status, dispatch])
 
+  // Clear actioning state when status settles (e.g., rebuild finishes)
+  useEffect(() => {
+    if (craftsman?.status === 'running' || craftsman?.status === 'stopped' || craftsman?.status === 'error') {
+      setIsActioning(false)
+    }
+  }, [craftsman?.status])
+
   // Subscribe to container logs when Logs tab is active
   useContainerLogs(craftsmanId, activeTab === 'logs', dispatch)
 
@@ -66,6 +73,20 @@ export default function ConversationPane({ craftsmanId }: Props) {
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : String(err))
     } finally {
+      setIsActioning(false)
+    }
+  }
+
+  async function handleRebuild() {
+    setActionError(null)
+    setIsActioning(true)
+    dispatch({ type: 'UPDATE_CRAFTSMAN_STATUS', id: craftsmanId, status: 'starting' })
+    useTerminalStore.getState().destroy(craftsmanId)
+    try {
+      await rebuildCraftsman(craftsmanId)
+      // Status will transition to 'running' via SSE events
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : String(err))
       setIsActioning(false)
     }
   }
@@ -113,6 +134,19 @@ export default function ConversationPane({ craftsmanId }: Props) {
         <div className="conversation-header-right">
           <button className="header-btn" onClick={() => setShowGit(true)}>
             Git
+          </button>
+          <button
+            className="header-btn"
+            onClick={handleRebuild}
+            disabled={isActioning || craftsman.status === 'starting' || craftsman.status === 'pending'}
+            title="Rebuild container (preserves files)"
+          >
+            {craftsman.status === 'starting' ? (
+              <>
+                <span className="spinner-inline" />
+                Rebuilding…
+              </>
+            ) : 'Rebuild'}
           </button>
           {isRunning || isStopping ? (
             <button
