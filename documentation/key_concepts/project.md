@@ -33,7 +33,7 @@ curl -X POST http://localhost:7424/api/projects \
   }'
 ```
 
-Or use the Settings pane in the web UI.
+Or use the Settings pane in the web UI, which also supports importing repos directly from GitHub.
 
 ## Data Model
 
@@ -43,7 +43,7 @@ flowchart LR
   P -.->|repo_url| GH[GitHub Repo]
 
   click P href "#" "server/src/types.ts:1-10"
-  click C href "#" "server/src/types.ts:12-23"
+  click C href "#" "server/src/types.ts:12-24"
 ```
 
 Projects are stored in SQLite with ports serialized as a JSON string.
@@ -54,8 +54,36 @@ flowchart TD
   B --> C[Store in SQLite]
   C --> D[Return project]
 
-  click A href "#" "server/src/routes/projects.ts"
-  click C href "#" "server/src/db/schema.ts:4-14"
+  click A href "#" "server/src/routes/projects.ts:10-26"
+  click C href "#" "server/src/db/schema.ts:5-14"
+```
+
+## Updating Ports
+
+Ports can be updated on an existing Project via `PATCH /api/projects/:id`. If any running Craftsmen are assigned to the project, their containers are **automatically recreated** with the new port mappings. The workspace is preserved.
+
+```bash
+curl -X PATCH http://localhost:7424/api/projects/abc-123 \
+  -H "Content-Type: application/json" \
+  -d '{"ports": [3000, 8080]}'
+```
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant A as API
+  participant D as Docker
+
+  U->>A: PATCH /api/projects/:id {ports}
+  A->>A: Update DB
+  loop For each running Craftsman
+    A->>D: recreateContainerWithPorts()
+    D-->>A: New container running
+  end
+  A-->>U: 200 OK
+
+  click A href "#" "server/src/routes/projects.ts:39-82"
+  click D href "#" "server/src/services/docker.ts:297-368"
 ```
 
 ## GitHub Token
@@ -78,7 +106,7 @@ sequenceDiagram
   Note over A: Token stored server-side only
   A-->>A: API returns has_github_token: true
 
-  click A href "#" "server/src/services/docker.ts:114-131"
+  click A href "#" "server/src/services/docker.ts:196-215"
 ```
 
 ## Ports
@@ -95,3 +123,8 @@ See [Architecture](architecture) for details on port forwarding.
 ## Deleting a Project
 
 A Project cannot be deleted while Craftsmen are assigned to it. Remove all Craftsmen first, then delete the project.
+
+```bash
+# Fails with 409 if craftsmen exist
+curl -X DELETE http://localhost:7424/api/projects/abc-123
+```

@@ -14,13 +14,13 @@ flowchart LR
     PP["ports: [3000, 8080]"]
   end
   subgraph Craftsman["Craftsman: alice"]
-    C3["3000 → 49200"]
-    C8["8080 → 49201"]
+    C3["3000 -> 49200"]
+    C8["8080 -> 49201"]
   end
   Project --> Craftsman
 
   click PP href "#" "server/src/db/schema.ts:5-14"
-  click C3 href "#" "server/src/services/docker.ts:71-101"
+  click C3 href "#" "server/src/services/docker.ts:85-140"
 ```
 
 The mapping is determined at container creation time and stored in the Craftsman's `port_mappings` field as JSON:
@@ -69,9 +69,9 @@ flowchart TD
   C -->|Response| WS
   WS -->|Response| B
 
-  click WS href "#" "server/src/index.ts:17-19"
+  click WS href "#" "server/src/index.ts:19-23"
   click DB href "#" "server/src/db/schema.ts:16-27"
-  click C href "#" "server/src/services/docker.ts:71-101"
+  click C href "#" "server/src/services/docker.ts:85-140"
 ```
 
 ## Checking Port Mappings
@@ -84,60 +84,77 @@ Select a Craftsman — the **Preview** tab shows available ports and provides li
 
 ```bash
 curl http://localhost:7424/api/craftsmen/alice
-# → {"port_mappings": "{\"3000\":49200}", ...}
+# -> {"port_mappings": "{\"3000\":49200}", ...}
 ```
 
 Parse the `port_mappings` JSON string to get the mapping.
 
 ## Updating Ports
 
-Port mappings are set when a Craftsman is created, based on the Project's `ports` field at that time. To change which ports are exposed:
+### Live update via PATCH (recommended)
 
-### For new Craftsmen
+You can update a Project's ports on-the-fly. Running Craftsmen are automatically recreated with new port mappings — the workspace is preserved.
 
-Update the Project's `ports` field before creating a new Craftsman. New Craftsmen will use the updated port list.
+```bash
+curl -X PATCH http://localhost:7424/api/projects/abc-123 \
+  -H "Content-Type: application/json" \
+  -d '{"ports": [3000, 8080]}'
+```
 
-### For existing Craftsmen
+```mermaid
+sequenceDiagram
+  participant U as You
+  participant A as Workshop API
+  participant D as Docker
 
-Port mappings cannot be changed on a running Craftsman. To update ports:
+  U->>A: PATCH /api/projects/:id {ports: [3000, 8080]}
+  A->>A: Update project in DB
+  loop For each running Craftsman
+    A->>D: recreateContainerWithPorts()
+    Note over D: Stop old container
+    Note over D: Create new with updated ports
+    Note over D: Preserve workspace volume
+    D-->>A: New container running
+  end
+  A-->>U: 200 OK (updated project)
+
+  click A href "#" "server/src/routes/projects.ts:39-82"
+  click D href "#" "server/src/services/docker.ts:297-368"
+```
+
+In the UI, you can click on a Project's ports in the Settings pane to edit them inline.
+
+### Manual recreation
+
+If the PATCH approach isn't suitable:
 
 1. **Save your work** — commit and push any changes
 2. **Delete** the Craftsman
 3. **Update** the Project's port configuration
 4. **Create** a new Craftsman
 
-```mermaid
-flowchart TD
-  A[Commit & push changes] --> B[Delete Craftsman]
-  B --> C[Update Project ports]
-  C --> D[Create new Craftsman]
-  D --> E[New port mappings allocated]
-
-  click B href "#" "server/src/routes/craftsmen.ts:101-112"
-  click C href "#" "server/src/routes/projects.ts"
-  click D href "#" "server/src/routes/craftsmen.ts:16-60"
-  click E href "#" "server/src/services/docker.ts:71-101"
-```
-
 ## Port Allocation Details
 
-The server scans ports 49200–49300 sequentially, skipping any that are already in use by other active Craftsmen. Each container port gets its own unique host port.
+The server scans ports 49200–49300 sequentially, skipping any that are already in use by other active Craftsmen. Ports that recently caused bind conflicts are temporarily excluded. Each container port gets its own unique host port.
 
 ```mermaid
 flowchart TD
   A[Project wants port 3000] --> B[Scan 49200-49300]
-  B --> C{49200 in use?}
-  C -->|Yes| D{49201 in use?}
-  D -->|No| E[Allocate 49201]
-  C -->|No| F[Allocate 49200]
-  E --> G[Docker PortBindings: 3000/tcp → 0.0.0.0:49201]
-  F --> G
+  B --> C{Port in use or excluded?}
+  C -->|Yes| D[Try next port]
+  D --> C
+  C -->|No| E[Allocate port]
+  E --> F[Docker PortBindings configured]
+  F --> G{Bind conflict?}
+  G -->|Yes| H[Exclude port, retry]
+  H --> B
+  G -->|No| I[Success]
 
-  click B href "#" "server/src/services/docker.ts:28-34"
-  click G href "#" "server/src/services/docker.ts:76-86"
+  click B href "#" "server/src/services/docker.ts:85-140"
+  click F href "#" "server/src/services/docker.ts:100-115"
 ```
 
-The maximum number of mapped ports across all active Craftsmen is **101** (49200–49300 inclusive).
+The maximum number of mapped ports across all active Craftsmen is **101** (49200–49300 inclusive). The server retries up to 5 times on port bind conflicts.
 
 ## Troubleshooting
 

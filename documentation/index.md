@@ -22,9 +22,10 @@ flowchart TD
   D --> C3[Craftsman: carol]
   W -->|Reverse Proxy| C1
   W -->|WebSocket Terminal| C2
+  W -->|MCP Bridges| C3
 
   click W href "#" "server/src/index.ts"
-  click DB href "#" "server/src/db/schema.ts:4-27"
+  click DB href "#" "server/src/db/schema.ts:3-37"
   click D href "#" "server/entrypoint.sh"
   click C1 href "#" "server/Dockerfile.craftsman"
 ```
@@ -36,6 +37,7 @@ flowchart TD
 | [**Workshop**](key_concepts/architecture) | The Docker-in-Docker server that runs everything — API, UI, and inner Docker daemon. |
 | [**Craftsman**](key_concepts/craftsman) | A named Docker container with Claude Code, git, and tmux. Does the actual coding work. |
 | [**Project**](key_concepts/project) | A GitHub repository configuration — repo URL, branch, setup command, and ports to expose. |
+| [**MCP Bridges**](key_concepts/mcp_bridges) | Per-craftsman supergateway processes that forward host MCP servers into containers. |
 
 ## Quick Start
 
@@ -49,9 +51,10 @@ docker compose up --build
 
 ### Key Concepts
 
+- [Architecture](key_concepts/architecture) — Docker-in-Docker, networking, and system design
 - [Craftsman](key_concepts/craftsman) — What Craftsmen are and how they work
 - [Project](key_concepts/project) — Configuring GitHub repositories as Projects
-- [Architecture](key_concepts/architecture) — Docker-in-Docker, networking, and system design
+- [MCP Bridges](key_concepts/mcp_bridges) — Forwarding host MCP servers into Craftsman containers
 
 ### How-To Guides
 
@@ -61,5 +64,6 @@ docker compose up --build
 ### Workflows
 
 - [Creating a Craftsman](workflows/creating_a_craftsman) — Hire a Craftsman via the UI or API
-- [Relieving a Craftsman](workflows/relieving_a_craftsman) — Stop, clean up, and remove a Craftsman
-- [Update Port Forwarding](workflows/update_craftsman_port_forwarding) — Manage exposed ports and the reverse proxy
+- [Assigning a Task](workflows/assigning_a_task) — Create a Craftsman with an automated task
+- [Relieving a Craftsman](workflows/relieving_a_craftsman) — Stop, rebuild, and remove a Craftsman
+- [Port Forwarding](workflows/update_craftsman_port_forwarding) — Manage exposed ports and the reverse proxy

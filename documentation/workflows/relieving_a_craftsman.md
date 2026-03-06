@@ -1,17 +1,18 @@
 ---
 title: Relieving a Craftsman
-description: How to stop, restart, and permanently remove a Craftsman.
-tags: [craftsman, stop, delete, workflow]
+description: How to stop, rebuild, restart, and permanently remove a Craftsman.
+tags: [craftsman, stop, delete, rebuild, workflow]
 ---
 
 ## Overview
 
-When a Craftsman's work is done — or you need to free up resources — you can **stop** it (preserving the container for later) or **delete** it (removing the container and all data).
+When a Craftsman's work is done — or you need to free up resources — you can **stop** it (preserving the container for later), **rebuild** it (fresh container, same workspace), or **delete** it (removing everything).
 
 ```mermaid
 stateDiagram-v2
   running --> stopped: Stop
   stopped --> running: Restart
+  running --> running: Rebuild
   running --> [*]: Delete
   stopped --> [*]: Delete
 ```
@@ -30,7 +31,7 @@ Stopping pauses the container without removing it. The repo, uncommitted changes
 
 ```bash
 curl -X POST http://localhost:7424/api/craftsmen/alice/stop
-# → {"status": "stopped", ...}
+# -> {"status": "stopped", ...}
 ```
 
 ```mermaid
@@ -41,17 +42,17 @@ sequenceDiagram
 
   U->>A: POST /craftsmen/alice/stop
   A->>D: container.stop()
-  A->>A: status → stopped
+  A->>A: status -> stopped
   A-->>U: 200 OK
   A-->>U: SSE event: stopped
 
-  click A href "#" "server/src/routes/craftsmen.ts:73-85"
-  click D href "#" "server/src/services/docker.ts:182-189"
+  click A href "#" "server/src/routes/craftsmen.ts:80-93"
+  click D href "#" "server/src/services/docker.ts:370-377"
 ```
 
 ## Restarting a Stopped Craftsman
 
-A stopped Craftsman can be brought back. The container resumes with its previous state intact.
+A stopped Craftsman can be brought back. The container resumes with its previous state intact — workspace, tmux session, and all.
 
 ### Via the UI
 
@@ -62,7 +63,7 @@ A stopped Craftsman can be brought back. The container resumes with its previous
 
 ```bash
 curl -X POST http://localhost:7424/api/craftsmen/alice/start
-# → {"status": "running", ...}
+# -> {"status": "running", ...}
 ```
 
 ```mermaid
@@ -73,17 +74,60 @@ sequenceDiagram
 
   U->>A: POST /craftsmen/alice/start
   A->>D: container.start()
-  A->>A: status → running
+  A->>D: Wait for inner dockerd
+  A->>D: Restart tmux session
+  A->>A: status -> running
   A-->>U: 200 OK
   A-->>U: SSE event: running
 
-  click A href "#" "server/src/routes/craftsmen.ts:87-99"
-  click D href "#" "server/src/services/docker.ts:191-194"
+  click A href "#" "server/src/routes/craftsmen.ts:95-107"
+  click D href "#" "server/src/services/docker.ts:379-396"
+```
+
+## Rebuilding a Craftsman
+
+Rebuild creates a fresh container but preserves the `/workspace` directory (your code changes are kept). This is useful when:
+
+- The Craftsman image has been updated
+- The container is in a bad state
+- MCP bridges need to be re-initialized
+
+### Via the UI
+
+1. Select the running Craftsman
+2. Click the **Rebuild** button
+
+### Via the API
+
+```bash
+curl -X POST http://localhost:7424/api/craftsmen/alice/rebuild
+```
+
+```mermaid
+sequenceDiagram
+  participant U as You
+  participant A as Workshop API
+  participant D as Docker
+  participant MB as MCP Bridges
+
+  U->>A: POST /craftsmen/alice/rebuild
+  A->>A: status -> starting
+  A->>MB: stopCraftsmanBridges()
+  A->>D: Remove old container
+  A->>D: Create new container (same workspace volume)
+  A->>D: initContainer (skip clone)
+  A->>MB: startCraftsmanBridges()
+  A->>A: status -> running
+  A-->>U: SSE event: running
+
+  click A href "#" "server/src/routes/craftsmen.ts:109-139"
+  click D href "#" "server/src/services/docker.ts:243-259"
+  click MB href "#" "server/src/services/mcp-bridge.ts:234-245"
 ```
 
 ## Deleting a Craftsman
 
-Deleting permanently removes the Docker container and the Craftsman record from the database. **This is irreversible** — any uncommitted changes in the container are lost.
+Deleting permanently removes the Docker container, the workspace directory, and the Craftsman record from the database. **This is irreversible** — any uncommitted changes in the container are lost.
 
 ### Before deleting, save your work
 
@@ -97,14 +141,14 @@ If the Craftsman has uncommitted changes you want to keep:
 ### Via the UI
 
 1. Select the Craftsman
-2. Click the **Delete** button
+2. Click the **Relieve** button
 3. Confirm the deletion
 
 ### Via the API
 
 ```bash
 curl -X DELETE http://localhost:7424/api/craftsmen/alice
-# → {"ok": true}
+# -> {"ok": true}
 ```
 
 ```mermaid
@@ -113,15 +157,19 @@ sequenceDiagram
   participant A as Workshop API
   participant D as Docker
   participant DB as SQLite
+  participant MB as MCP Bridges
 
   U->>A: DELETE /craftsmen/alice
+  A->>MB: stopCraftsmanBridges()
   A->>D: container.stop()
   A->>D: container.remove()
+  A->>D: Delete workspace directory
   A->>DB: DELETE FROM craftsmen
   A-->>U: 200 OK
 
-  click A href "#" "server/src/routes/craftsmen.ts:101-112"
-  click D href "#" "server/src/services/docker.ts:196-204"
+  click A href "#" "server/src/routes/craftsmen.ts:141-153"
+  click D href "#" "server/src/services/docker.ts:398-411"
+  click MB href "#" "server/src/services/mcp-bridge.ts:234-245"
 ```
 
 ## Recommended Workflow
@@ -134,13 +182,16 @@ flowchart TD
   D --> E{Need the Craftsman again?}
   E -->|Maybe later| F[Stop]
   E -->|No| G[Delete]
+  A -->|Container broken| H[Rebuild]
   A -->|Taking a break| F
 
-  click B href "#" "server/src/services/docker.ts:206-213"
-  click C href "#" "server/src/services/docker.ts:215-232"
-  click D href "#" "server/src/services/docker.ts:234-244"
+  click B href "#" "server/src/services/docker.ts:413-420"
+  click C href "#" "server/src/services/docker.ts:422-439"
+  click D href "#" "server/src/services/docker.ts:441-451"
 ```
 
 **Stop** when you might need the Craftsman again — it preserves the environment and is faster to resume than creating a new one.
+
+**Rebuild** when the container is broken but the code is fine — it keeps your workspace while creating a fresh container environment.
 
 **Delete** when the work is finished and merged — it frees up resources and the port allocation.

@@ -44,14 +44,16 @@ flowchart TD
   F -->|Yes| G[Start Workshop server]
   G --> H[Migrate SQLite schema]
   H --> I[Build Craftsman image]
-  I --> J[Reconcile container states]
-  J --> K[Listen on :7424]
+  I --> J[Start MCP bridges]
+  J --> K[Reconcile container states]
+  K --> L[Listen on :7424]
 
   click D href "#" "server/entrypoint.sh"
-  click G href "#" "server/src/index.ts:10-31"
-  click H href "#" "server/src/db/schema.ts:3-31"
-  click I href "#" "server/src/services/docker.ts:36-69"
-  click J href "#" "server/src/services/docker.ts:294-315"
+  click G href "#" "server/src/index.ts:11-28"
+  click H href "#" "server/src/db/schema.ts:3-37"
+  click I href "#" "server/src/services/docker.ts:50-83"
+  click J href "#" "server/src/services/mcp-bridge.ts:186-195"
+  click K href "#" "server/src/services/docker.ts:501-522"
 ```
 
 The first build of the Craftsman image takes a minute or two (installs Claude Code CLI). Subsequent starts reuse the cached image unless `Dockerfile.craftsman` changes.
@@ -71,8 +73,8 @@ flowchart LR
   ENV[Environment Variables] --> WC[Workshop Container]
   WC -->|ANTHROPIC_API_KEY| CC[Craftsman Containers]
 
-  click WC href "#" "docker-compose.yml:10-13"
-  click CC href "#" "server/src/services/docker.ts:88-91"
+  click WC href "#" "docker-compose.yml:11-14"
+  click CC href "#" "server/src/services/docker.ts:100-115"
 ```
 
 ## Exposed Ports
@@ -80,6 +82,7 @@ flowchart LR
 | Port(s) | Purpose |
 |---------|---------|
 | `7424` | Workshop API + web UI |
+| `48100-48399` | MCP bridge SSE endpoints (host MCP servers forwarded to containers) |
 | `49200-49300` | Allocated to Craftsman container ports |
 
 ## Persistent Volumes
@@ -94,6 +97,18 @@ Data persists across `docker compose down` / `up` cycles. To fully reset, remove
 ```bash
 docker compose down -v
 ```
+
+## MCP Server Forwarding
+
+If you have MCP servers configured in your host `~/.claude.json`, Workshop automatically bridges them into Craftsman containers. The host config file is mounted read-only into the Workshop container.
+
+To update MCP auth tokens without restarting Workshop, use the **Resync MCP Auth** button in Settings or call:
+
+```bash
+curl -X POST http://localhost:7424/api/mcp/restart
+```
+
+See [MCP Bridges](../key_concepts/mcp_bridges) for details on how this works.
 
 ## Development Setup
 
@@ -119,7 +134,7 @@ Once Workshop is running, check the health endpoint:
 
 ```bash
 curl http://localhost:7424/api/health
-# → {"status":"ok"}
+# -> {"status":"ok"}
 ```
 
-Then open **http://localhost:7424** in your browser. You should see the Workshop UI with an empty Craftsmen sidebar. Next step: [create a Project](../workflows/creating_a_craftsman) and hire your first Craftsman.
+Then open **http://localhost:7424** in your browser. You should see the Workshop UI with an empty Craftsmen sidebar. Next step: [create a Project and hire your first Craftsman](developing_a_project).
