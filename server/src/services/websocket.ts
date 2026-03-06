@@ -5,12 +5,12 @@ import db from "../db/client.js";
 import type { Craftsman } from "../types.js";
 import { createTerminalExec } from "./terminal.js";
 
-async function handleConnection(ws: WebSocket, craftsman: Craftsman): Promise<void> {
+async function handleConnection(ws: WebSocket, craftsman: Craftsman, cols: number, rows: number): Promise<void> {
   try {
     const { stream, exec } = await createTerminalExec(
       craftsman.container_id!,
-      80,
-      24
+      cols,
+      rows
     );
 
     // Docker stream → WebSocket (binary)
@@ -59,11 +59,14 @@ export function setupTerminalWebSocket(server: Server): void {
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
-    const url = req.url ?? "";
-    const match = url.match(/^\/api\/craftsmen\/([^/]+)\/terminal$/);
+    const urlObj = new URL(req.url ?? "", `http://${req.headers.host}`);
+    const match = urlObj.pathname.match(/^\/api\/craftsmen\/([^/]+)\/terminal$/);
     if (!match) {
       return;
     }
+
+    const cols = parseInt(urlObj.searchParams.get("cols") ?? "80", 10) || 80;
+    const rows = parseInt(urlObj.searchParams.get("rows") ?? "24", 10) || 24;
 
     const idOrName = decodeURIComponent(match[1]);
     const craftsman = db
@@ -77,7 +80,7 @@ export function setupTerminalWebSocket(server: Server): void {
     }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
-      handleConnection(ws, craftsman);
+      handleConnection(ws, craftsman, cols, rows);
     });
   });
 }

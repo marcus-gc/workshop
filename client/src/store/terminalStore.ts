@@ -5,13 +5,14 @@ import { FitAddon } from '@xterm/addon-fit'
 interface TerminalSession {
   terminal: Terminal
   fitAddon: FitAddon
-  ws: WebSocket
+  ws: WebSocket | null
   element: HTMLDivElement
 }
 
 interface TerminalStore {
   sessions: Record<string, TerminalSession>
   getOrCreate: (craftsmanId: string) => TerminalSession
+  connect: (craftsmanId: string, cols: number, rows: number) => void
   destroy: (craftsmanId: string) => void
 }
 
@@ -20,13 +21,13 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   getOrCreate(craftsmanId: string) {
     const existing = get().sessions[craftsmanId]
-    if (existing && existing.ws.readyState <= WebSocket.OPEN) {
+    if (existing && (!existing.ws || existing.ws.readyState <= WebSocket.OPEN)) {
       return existing
     }
 
     // Clean up stale session if any
     if (existing) {
-      existing.ws.close()
+      existing.ws?.close()
       existing.terminal.dispose()
     }
 
@@ -49,19 +50,21 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     element.style.width = '100%'
     element.style.height = '100%'
 
+    const session: TerminalSession = { terminal, fitAddon, ws: null, element }
+    set((state) => ({ sessions: { ...state.sessions, [craftsmanId]: session } }))
+    return session
+  },
+
+  connect(craftsmanId: string, cols: number, rows: number) {
+    const session = get().sessions[craftsmanId]
+    if (!session || session.ws) return
+
+    const { terminal } = session
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const ws = new WebSocket(
-      `${protocol}//${location.host}/api/craftsmen/${craftsmanId}/terminal`
+      `${protocol}//${location.host}/api/craftsmen/${craftsmanId}/terminal?cols=${cols}&rows=${rows}`
     )
     ws.binaryType = 'arraybuffer'
-
-    ws.addEventListener('open', () => {
-      // Only fit if terminal has already been opened (element attached to DOM)
-      if (terminal.element) {
-        fitAddon.fit()
-        ws.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }))
-      }
-    })
 
     ws.addEventListener('message', (event) => {
       if (event.data instanceof ArrayBuffer) {
@@ -90,15 +93,15 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       }
     })
 
-    const session: TerminalSession = { terminal, fitAddon, ws, element }
+    // Update session with the connected WebSocket
+    session.ws = ws
     set((state) => ({ sessions: { ...state.sessions, [craftsmanId]: session } }))
-    return session
   },
 
   destroy(craftsmanId: string) {
     const session = get().sessions[craftsmanId]
     if (!session) return
-    session.ws.close()
+    session.ws?.close()
     session.terminal.dispose()
     set((state) => {
       const { [craftsmanId]: _, ...rest } = state.sessions
